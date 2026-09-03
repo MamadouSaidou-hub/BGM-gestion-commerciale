@@ -121,7 +121,7 @@ function NewTransferForm({
         </div>
       </div>
 
-      <label style={{ fontSize: 10, fontWeight: 700, color: '#53647a', display: 'block', marginBottom: 6 }}>Articles</label>
+      <label style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', display: 'block', marginBottom: 6 }}>Articles</label>
       {items.map((item, index) => (
         <div className="item-row-grid" style={{ gridTemplateColumns: '2fr 1fr auto' }} key={index}>
           <div className="form-field" style={{ marginBottom: 0 }}>
@@ -235,12 +235,12 @@ export function TransfertsView() {
             <tbody>
               {filteredTransfers.map((transfer) => (
                 <tr key={transfer.reference}>
-                  <td>#{transfer.reference}</td>
-                  <td>{new Date(transfer.date).toLocaleString('fr-FR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}</td>
-                  <td>{transfer.fromStore}</td>
-                  <td>{transfer.toStore}</td>
-                  <td>{transfer.totalQuantity} ({transfer.itemCount} réf.)</td>
-                  <td><span className={`badge ${statusBadge[transfer.status]}`}>{statusLabel[transfer.status]}</span></td>
+                  <td data-label="Référence">#{transfer.reference}</td>
+                  <td data-label="Date">{new Date(transfer.date).toLocaleString('fr-FR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}</td>
+                  <td data-label="Origine">{transfer.fromStore}</td>
+                  <td data-label="Destination">{transfer.toStore}</td>
+                  <td data-label="Articles">{transfer.totalQuantity} ({transfer.itemCount} réf.)</td>
+                  <td data-label="Statut"><span className={`badge ${statusBadge[transfer.status]}`}>{statusLabel[transfer.status]}</span></td>
                   <td>
                     {transfer.status !== 'completed' && (
                       <button className="btn-ghost" disabled={receivingId === transfer.id} onClick={() => handleReceive(transfer.id)}>

@@ -142,10 +142,10 @@ export function UtilisateursView() {
             <tbody>
               {users.map((row) => (
                 <tr key={row.id}>
-                  <td>{row.name}</td>
-                  <td>{row.email}</td>
-                  <td><span className={`badge ${roleBadge[row.role] ?? 'badge-muted'}`}>{roleLabel[row.role] ?? row.role}</span></td>
-                  <td>{row.role === 'admin' ? 'Tous les magasins' : row.store}</td>
+                  <td data-label="Nom">{row.name}</td>
+                  <td data-label="E-mail">{row.email}</td>
+                  <td data-label="Rôle"><span className={`badge ${roleBadge[row.role] ?? 'badge-muted'}`}>{roleLabel[row.role] ?? row.role}</span></td>
+                  <td data-label="Magasin">{row.role === 'admin' ? 'Tous les magasins' : row.store}</td>
                 </tr>
               ))}
             </tbody>

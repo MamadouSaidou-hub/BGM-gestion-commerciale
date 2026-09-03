@@ -136,7 +136,7 @@ function NewSaleForm({
         </div>
       </div>
 
-      <label style={{ fontSize: 10, fontWeight: 700, color: '#53647a', display: 'block', marginBottom: 6 }}>Articles</label>
+      <label style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', display: 'block', marginBottom: 6 }}>Articles</label>
       {items.map((item, index) => (
         <div className="item-row-grid" key={index}>
           <div className="form-field" style={{ marginBottom: 0 }}>
@@ -261,12 +261,12 @@ export function SalesView() {
             <tbody>
               {filteredSales.map((sale) => (
                 <tr key={sale.reference}>
-                  <td>#{sale.reference}</td>
-                  <td>{new Date(sale.date).toLocaleString('fr-FR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}</td>
-                  <td>{sale.store}</td>
-                  <td>{sale.client}</td>
-                  <td>{sale.amount}</td>
-                  <td><span className={`badge ${statusBadge[sale.status]}`}>{statusLabel[sale.status]}</span></td>
+                  <td data-label="Référence">#{sale.reference}</td>
+                  <td data-label="Date">{new Date(sale.date).toLocaleString('fr-FR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}</td>
+                  <td data-label="Magasin">{sale.store}</td>
+                  <td data-label="Client">{sale.client}</td>
+                  <td data-label="Montant">{sale.amount}</td>
+                  <td data-label="Statut"><span className={`badge ${statusBadge[sale.status]}`}>{statusLabel[sale.status]}</span></td>
                   <td><a className="btn-ghost" href={`/ventes/${sale.reference}/facture`} target="_blank" rel="noopener noreferrer"><Receipt size={12} style={{ verticalAlign: 'middle', marginRight: 4 }} />Facture</a></td>
                 </tr>
               ))}

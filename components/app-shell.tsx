@@ -15,7 +15,6 @@ import {
   Package,
   ReceiptText,
   Search,
-  Settings,
   ShoppingCart,
   Store,
   Truck,
@@ -25,6 +24,7 @@ import {
   X,
 } from 'lucide-react'
 import { authClient } from '@/lib/auth-client'
+import { AppearanceMenu } from '@/components/appearance-menu'
 
 const navItems = [
   { href: '/', label: 'Tableau de bord', icon: LayoutDashboard, adminOnly: false },
@@ -83,12 +83,12 @@ function UserChip() {
             bottom: '100%',
             left: 0,
             right: 0,
-            background: 'white',
-            border: '1px solid #dce4ed',
+            background: 'var(--card)',
+            border: '1px solid var(--border)',
             borderRadius: 6,
             marginBottom: 6,
             overflow: 'hidden',
-            boxShadow: '0 4px 14px rgba(16,25,41,.12)',
+            boxShadow: '0 4px 14px rgba(16,25,41,.25)',
           }}
         >
           <button
@@ -146,7 +146,7 @@ export function AppShell({
           ))}
         </nav>
         <div className="sidebar-footer">
-          <a className="nav-link" href="#parametres"><Settings />Paramètres</a>
+          <AppearanceMenu />
           <UserChip />
         </div>
       </aside>

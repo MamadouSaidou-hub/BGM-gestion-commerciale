@@ -204,12 +204,12 @@ export function ClientsView() {
             <tbody>
               {filteredClients.map((client) => (
                 <tr key={client.id}>
-                  <td><span style={{ display: 'flex', alignItems: 'center', gap: 8 }}><CreditCard size={13} color="#9aa8b8" />{client.name}</span></td>
-                  <td>{client.phone}</td>
-                  <td>{client.store}</td>
-                  <td>{client.totalPaid}</td>
-                  <td>{client.outstanding}</td>
-                  <td><span className={`badge ${statusBadge[client.status]}`}>{statusLabel[client.status]}</span></td>
+                  <td data-label="Client"><span style={{ display: 'flex', alignItems: 'center', gap: 8 }}><CreditCard size={13} color="var(--faint)" />{client.name}</span></td>
+                  <td data-label="Téléphone">{client.phone}</td>
+                  <td data-label="Magasin">{client.store}</td>
+                  <td data-label="Encaissé">{client.totalPaid}</td>
+                  <td data-label="Créance">{client.outstanding}</td>
+                  <td data-label="Statut"><span className={`badge ${statusBadge[client.status]}`}>{statusLabel[client.status]}</span></td>
                   <td style={{ display: 'flex', gap: 6 }}>
                     {client.status !== 'ok' && (
                       <button className="btn-ghost" onClick={() => setPaymentClient(client)}><WalletCards size={12} style={{ verticalAlign: 'middle', marginRight: 4 }} />Encaisser</button>

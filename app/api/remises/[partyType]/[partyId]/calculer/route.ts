@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { computeDiscount, currentPeriod, type PartyType } from '@/lib/db/mutations'
+import { checkAndGrantSupplierCycle, computeDiscount, currentPeriod } from '@/lib/db/mutations'
 import { getSessionContext, isAdmin } from '@/lib/session'
 
 export async function POST(_request: Request, { params }: { params: Promise<{ partyType: string; partyId: string }> }) {
@@ -12,6 +12,13 @@ export async function POST(_request: Request, { params }: { params: Promise<{ pa
     return NextResponse.json({ error: 'Paramètres invalides.' }, { status: 400 })
   }
 
-  const result = await computeDiscount(partyType as PartyType, Number(partyId), currentPeriod())
-  return NextResponse.json({ result })
+  if (partyType === 'client') {
+    const result = await computeDiscount('client', Number(partyId), currentPeriod())
+    return NextResponse.json({ result })
+  }
+
+  // Supplier: no calendar period — checks whether the current cycle has crossed a tier, grants it and
+  // resets the cycle if so. Returns null (no grant yet) rather than a zeroed-out result.
+  const grant = await checkAndGrantSupplierCycle(Number(partyId))
+  return NextResponse.json({ result: grant })
 }

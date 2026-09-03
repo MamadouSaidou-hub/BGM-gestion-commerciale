@@ -39,12 +39,14 @@ BGM (Barry-Gate Multi Service) est une application de gestion pour une entrepris
 ### Correctifs de fiabilité
 - `createSale` sécurisé par transaction DB (corrige un vrai bug de paiement partiel non comptabilisé + une race condition de survente en cas de ventes simultanées).
 
-### Remise par palier (module générique)
+### Remise par palier (module générique — deux modes de calcul distincts)
 - Un seul système pour les remises fournisseur ET client (`lib/db/mutations/discounts.ts`), basé sur `discountScales`/`discountTiers`/`discountApplications`.
-- **Palier "cliff"** : atteindre un seuil applique la remise à TOUS les sacs du mois (pas un calcul marginal).
-- **Calcul en fin de mois à la demande** (bouton "Calculer"), informationnel — n'affecte jamais automatiquement une créance/dette existante.
-- Compteur en direct "sacs restants avant palier suivant".
-- UI partagée `components/discount-scale-modal.tsx`, accessible via un bouton "Barème" depuis Clients et Fournisseurs (admin uniquement).
+- **Palier "cliff"** dans les deux cas : atteindre un seuil applique la remise à TOUS les sacs comptés (pas un calcul marginal par tranche).
+- **Côté client (grossiste)** : modèle **mensuel**, remise à zéro chaque calendrier — calcul à la demande (bouton "Calculer"), informationnel, n'affecte jamais automatiquement une créance existante.
+- **Côté fournisseur** : modèle **cyclique sans limite de temps** (précisé par le client début sept. 2026) — `discountScales.cycleStartAt` marque le début du cycle en cours ; dès que le cumul de sacs livrés depuis ce point atteint le plus haut palier configuré, la remise est **accordée automatiquement** (déclenchée depuis `recordSupplierDelivery`, best-effort — ne bloque jamais l'enregistrement d'une livraison si ça échoue) et le cycle repart à zéro. Le bouton "Vérifier le palier" reste dispo pour forcer une vérification manuelle. Le dépassement au-delà du palier lors d'une même livraison est inclus dans le montant remisé de ce cycle, puis n'est pas reporté sur le suivant.
+- Compteur en direct "sacs restants avant palier suivant" dans les deux modes.
+- UI partagée `components/discount-scale-modal.tsx` (libellés adaptés au mode), accessible via un bouton "Barème" depuis Clients et Fournisseurs (admin uniquement).
+- **Piège rencontré et corrigé** : `cycleStartAt` est comparé à `supplierDeliveries.createdAt` (rempli par `CURRENT_TIMESTAMP` de SQLite, format `"YYYY-MM-DD HH:MM:SS"`). Il **doit** être stocké dans ce même format — pas `Date#toISOString()` (`"...THH:MM:SS.sssZ"`), sinon la comparaison en chaîne de caractères devient fausse pour deux horodatages du même jour (`' ' < 'T'` en ASCII). Et la comparaison de bornure doit être stricte (`gt`, pas `gte`) car SQLite n'a qu'une résolution à la seconde — la livraison qui déclenche l'octroi et la remise à zéro qui suit peuvent tomber dans la même seconde. Voir [[bgm-auth-quirks]] pour les autres pièges de ce type sur ce projet.
 
 ### Alertes d'échéance
 - Bandeau sur le tableau de bord, calculé en direct depuis `receivables.dueDate` (le statut `overdue` n'est jamais mis à jour automatiquement nulle part dans le code — ne pas s'y fier).

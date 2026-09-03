@@ -2,6 +2,7 @@ import { and, eq } from 'drizzle-orm'
 import { db } from '../client'
 import { products, stockLevels, stockMovements, supplierDeliveries, supplierPayables, suppliers } from '../schema'
 import { getQuantity } from './shared'
+import { checkAndGrantSupplierCycle } from './discounts'
 
 export async function createSupplier(input: { name: string; phone?: string }) {
   const [supplier] = await db.insert(suppliers).values({ name: input.name, phone: input.phone ?? null }).returning()
@@ -72,6 +73,16 @@ export async function recordSupplierDelivery(input: {
       }
     }
 
+    return delivery
+  }).then(async (delivery) => {
+    // Best-effort: check whether this delivery crosses a discount-tier threshold and, if so, grant it.
+    // Done after the transaction commits (so the delivery is visible), and never allowed to fail the
+    // delivery itself — a discount-check glitch shouldn't block recording a real stock reception.
+    try {
+      await checkAndGrantSupplierCycle(input.supplierId)
+    } catch (error) {
+      console.error('checkAndGrantSupplierCycle failed after recordSupplierDelivery', error)
+    }
     return delivery
   })
 }

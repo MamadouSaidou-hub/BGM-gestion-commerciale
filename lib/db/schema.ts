@@ -222,6 +222,10 @@ export const discountScales = sqliteTable('discount_scales', {
   // Not FK-constrained — polymorphic across `clients`/`suppliers`, validated at the application layer,
   // matching the pattern already used by `stockCounts.countedBy`.
   partyId: integer('party_id').notNull(),
+  // Supplier scales only: start of the current uncompleted cycle (no calendar-period limit — every
+  // `thresholdSacks` sold resets this to "now" and starts counting again). Null = counting from the
+  // scale's creation. Client scales stay on the monthly model and never set this.
+  cycleStartAt: text('cycle_start_at'),
   ...timestamps,
 })
 

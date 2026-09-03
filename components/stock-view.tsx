@@ -340,14 +340,14 @@ export function StockView() {
             <tbody>
               {filteredItems.map((item) => (
                 <tr key={`${item.sku}-${item.store}`}>
-                  <td>{item.name}</td>
-                  <td>{item.sku}</td>
-                  <td>{item.category}</td>
-                  <td>{item.store}</td>
-                  <td>{item.quantity}</td>
-                  <td>{item.threshold}</td>
-                  <td>{item.unitPrice}</td>
-                  <td><span className={`badge ${statusBadge[item.status]}`}>{statusLabel[item.status]}</span></td>
+                  <td data-label="Produit">{item.name}</td>
+                  <td data-label="SKU">{item.sku}</td>
+                  <td data-label="Catégorie">{item.category}</td>
+                  <td data-label="Magasin">{item.store}</td>
+                  <td data-label="Quantité">{item.quantity}</td>
+                  <td data-label="Seuil">{item.threshold}</td>
+                  <td data-label="Prix unitaire">{item.unitPrice}</td>
+                  <td data-label="Statut"><span className={`badge ${statusBadge[item.status]}`}>{statusLabel[item.status]}</span></td>
                 </tr>
               ))}
             </tbody>
@@ -374,12 +374,12 @@ export function StockView() {
               <tbody>
                 {counts.map((row) => (
                   <tr key={row.id}>
-                    <td>{new Date(row.createdAt).toLocaleString('fr-FR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}</td>
-                    <td>{row.productName} ({row.sku})</td>
-                    <td>{row.storeName}</td>
-                    <td>{row.theoreticalQty}</td>
-                    <td>{row.countedQty}</td>
-                    <td style={{ color: row.variance === 0 ? undefined : row.variance > 0 ? '#2e9e3f' : '#c0392b', fontWeight: 700 }}>{row.variance > 0 ? `+${row.variance}` : row.variance}</td>
+                    <td data-label="Date">{new Date(row.createdAt).toLocaleString('fr-FR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}</td>
+                    <td data-label="Produit">{row.productName} ({row.sku})</td>
+                    <td data-label="Magasin">{row.storeName}</td>
+                    <td data-label="Théorique">{row.theoreticalQty}</td>
+                    <td data-label="Compté">{row.countedQty}</td>
+                    <td data-label="Écart" style={{ color: row.variance === 0 ? undefined : row.variance > 0 ? 'var(--green)' : 'var(--red)', fontWeight: 700 }}>{row.variance > 0 ? `+${row.variance}` : row.variance}</td>
                   </tr>
                 ))}
               </tbody>

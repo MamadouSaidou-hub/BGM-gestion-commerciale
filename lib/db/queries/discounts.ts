@@ -2,10 +2,38 @@ import { and, desc, eq } from 'drizzle-orm'
 import { db } from '../client'
 import { discountApplications, discountScales, discountTiers } from '../schema'
 import { formatFcfa } from '@/lib/format'
-import { computeDiscount, currentPeriod, type PartyType } from '../mutations/discounts'
+import { computeDiscount, currentPeriod, getSupplierCycleProgress, type PartyType } from '../mutations/discounts'
 
 export async function getDiscountScale(partyType: PartyType, partyId: number) {
-  const live = await computeDiscount(partyType, partyId, currentPeriod())
+  // Client scales: monthly, recomputed (and upserted) live on every read — cheap and idempotent per period.
+  // Supplier scales: no calendar period — read-only progress since the last granted cycle. Granting only
+  // happens explicitly (a delivery crossing a tier, or the "Calculer" button), never as a GET side effect.
+  const current =
+    partyType === 'client'
+      ? await (async () => {
+          const live = await computeDiscount('client', partyId, currentPeriod())
+          return {
+            period: live.period as string | null,
+            sackCount: live.sackCount,
+            tierReached: live.tierReached,
+            discountPerSack: live.discountPerSack,
+            totalDiscount: live.totalDiscount,
+            totalDiscountFormatted: formatFcfa(live.totalDiscount),
+            nextTier: live.nextTier,
+          }
+        })()
+      : await (async () => {
+          const progress = await getSupplierCycleProgress(partyId)
+          return {
+            period: null as string | null,
+            sackCount: progress.sackCount,
+            tierReached: null,
+            discountPerSack: 0,
+            totalDiscount: 0,
+            totalDiscountFormatted: formatFcfa(0),
+            nextTier: progress.nextTier,
+          }
+        })()
 
   const [scale] = await db.select().from(discountScales).where(and(eq(discountScales.partyType, partyType), eq(discountScales.partyId, partyId)))
   const tiers = scale
@@ -14,15 +42,7 @@ export async function getDiscountScale(partyType: PartyType, partyId: number) {
 
   return {
     tiers: tiers.map((tier) => ({ id: tier.id, thresholdSacks: tier.thresholdSacks, discountPerSack: tier.discountPerSack })),
-    current: {
-      period: live.period,
-      sackCount: live.sackCount,
-      tierReached: live.tierReached,
-      discountPerSack: live.discountPerSack,
-      totalDiscount: live.totalDiscount,
-      totalDiscountFormatted: formatFcfa(live.totalDiscount),
-      nextTier: live.nextTier,
-    },
+    current,
   }
 }
 

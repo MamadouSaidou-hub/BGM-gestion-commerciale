@@ -53,7 +53,7 @@ export function ReportsView() {
           </div>
         </article>
         <article className="panel">
-          <div className="panel-header"><div><h2 className="section-title">Top produits vendus</h2><p className="section-subtitle">Par chiffre d’affaires généré</p></div><TrendingUp size={16} color="#9aa8b8" /></div>
+          <div className="panel-header"><div><h2 className="section-title">Top produits vendus</h2><p className="section-subtitle">Par chiffre d’affaires généré</p></div><TrendingUp size={16} color="var(--faint)" /></div>
           <div className="activity-list">
             {(data?.topProducts ?? []).map((product) => (
               <div className="activity-row" key={product.name}>

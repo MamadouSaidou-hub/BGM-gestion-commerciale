@@ -105,12 +105,21 @@ Pour créer d'autres comptes : se connecter en admin → menu **Utilisateurs** �
 - Magasins : vue d'ensemble + création de nouveaux magasins.
 
 ### 7.9 Remise par palier (barème)
-Depuis Clients ou Fournisseurs → bouton "Barème" :
-1. Ajouter des paliers : seuil (en sacs/mois) + remise par sac (FCFA). Ex : 5 sacs → 500 F, 10 sacs → 1000 F. "Enregistrer le barème".
-2. La ligne au-dessus affiche en direct : sacs déjà écoulés ce mois, palier atteint, ristourne du mois, et "prochain palier dans X sacs".
-3. Bouton **"Calculer la ristourne du mois"** : recalcule et enregistre le résultat du mois en cours dans l'historique (visible en bas de la fenêtre). Peut être recliqué à tout moment (recalcul, pas de doublon).
+Depuis Clients ou Fournisseurs → bouton "Barème". **Le fonctionnement diffère selon le côté :**
+
+**Côté client (grossiste) — modèle mensuel :**
+1. Ajouter des paliers : seuil (en sacs **par mois civil**) + remise par sac (FCFA). Ex : 5 sacs → 500 F, 10 sacs → 1000 F. "Enregistrer le barème".
+2. La ligne au-dessus affiche en direct : sacs déjà écoulés **ce mois**, palier atteint, ristourne du mois, "prochain palier dans X sacs".
+3. Bouton **"Calculer la ristourne du mois"** : recalcule et enregistre le résultat du mois en cours dans l'historique. Le compteur repart à zéro tout seul au changement de mois.
+
+**Côté fournisseur — modèle cyclique, sans limite de temps :**
+1. Ajouter des paliers : seuil en sacs (ex : 2000 sacs → 5000 F/sac) — **aucune notion de mois** ici.
+2. La ligne au-dessus affiche : sacs livrés **depuis le dernier palier accordé** (pas "ce mois"), et "prochain palier dans X sacs".
+3. **La remise se déclenche automatiquement** dès qu'une livraison fait franchir le seuil le plus haut configuré — pas besoin de cliquer sur quoi que ce soit. Le cycle repart alors à zéro et recompte à partir de la livraison suivante. Le bouton **"Vérifier le palier"** reste disponible pour forcer une vérification manuelle (sans effet si le seuil n'est pas encore atteint).
+
+Dans les deux cas :
 - ⚠️ La remise est **informationnelle uniquement** — elle n'est jamais déduite automatiquement d'une créance ou d'une dette. C'est à l'admin de décider comment l'appliquer (avoir, remboursement...).
-- Le calcul est en mode **"cliff"** : atteindre un palier applique la remise à la totalité des sacs du mois, pas seulement à ceux au-dessus du seuil.
+- Mode **"cliff"** : atteindre un palier applique la remise à la totalité des sacs comptés dans la période/le cycle, pas seulement à ceux au-dessus du seuil.
 
 ### 7.10 Utilisateurs (`/utilisateurs`) — admin uniquement
 - "Nouvel utilisateur" : nom, e-mail, mot de passe (8 caractères min.), rôle. Si "Gestionnaire", un magasin est obligatoire.

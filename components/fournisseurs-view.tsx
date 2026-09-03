@@ -291,12 +291,12 @@ export function FournisseursView() {
             <tbody>
               {filteredSuppliers.map((supplier) => (
                 <tr key={supplier.id}>
-                  <td><span style={{ display: 'flex', alignItems: 'center', gap: 8 }}><Truck size={13} color="#9aa8b8" />{supplier.name}</span></td>
-                  <td>{supplier.phone}</td>
-                  <td>{supplier.sacksThisMonth}</td>
-                  <td>{supplier.totalPaid}</td>
-                  <td>{supplier.owed}</td>
-                  <td><span className={`badge ${statusBadge[supplier.status]}`}>{statusLabel[supplier.status]}</span></td>
+                  <td data-label="Fournisseur"><span style={{ display: 'flex', alignItems: 'center', gap: 8 }}><Truck size={13} color="var(--faint)" />{supplier.name}</span></td>
+                  <td data-label="Téléphone">{supplier.phone}</td>
+                  <td data-label="Sacs ce mois">{supplier.sacksThisMonth}</td>
+                  <td data-label="Payé">{supplier.totalPaid}</td>
+                  <td data-label="Dû">{supplier.owed}</td>
+                  <td data-label="Statut"><span className={`badge ${statusBadge[supplier.status]}`}>{statusLabel[supplier.status]}</span></td>
                   <td style={{ display: 'flex', gap: 6 }}>
                     <button className="btn-ghost" onClick={() => setDeliverySupplier(supplier)}><Package size={12} style={{ verticalAlign: 'middle', marginRight: 4 }} />Livraison</button>
                     {supplier.status !== 'ok' && (
