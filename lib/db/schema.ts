@@ -1,32 +1,36 @@
-import { relations, sql } from 'drizzle-orm'
-import { integer, real, sqliteTable, text } from 'drizzle-orm/sqlite-core'
+import { relations } from 'drizzle-orm'
+import { doublePrecision, integer, pgTable, serial, text } from 'drizzle-orm/pg-core'
 
 const timestamps = {
+  // JS-side default (not a DB-level `now()`/`current_timestamp`) so every timestamp in the app is
+  // generated the same way and stays safely string-comparable — see the bgm-sqlite-timestamp-quirk
+  // lesson: mixing a DB-generated timestamp format with `Date#toISOString()` elsewhere broke same-day
+  // string comparisons. This sidesteps that entirely, regardless of DB engine.
   createdAt: text('created_at')
     .notNull()
-    .default(sql`(current_timestamp)`),
+    .$defaultFn(() => new Date().toISOString()),
 }
 
-export const stores = sqliteTable('stores', {
-  id: integer('id').primaryKey({ autoIncrement: true }),
+export const stores = pgTable('stores', {
+  id: serial('id').primaryKey(),
   name: text('name').notNull(),
   city: text('city').notNull(),
   ...timestamps,
 })
 
-export const products = sqliteTable('products', {
-  id: integer('id').primaryKey({ autoIncrement: true }),
+export const products = pgTable('products', {
+  id: serial('id').primaryKey(),
   name: text('name').notNull(),
   sku: text('sku').notNull().unique(),
   category: text('category').notNull(),
-  unitPrice: real('unit_price').notNull(),
-  costPrice: real('cost_price').notNull(),
+  unitPrice: doublePrecision('unit_price').notNull(),
+  costPrice: doublePrecision('cost_price').notNull(),
   reorderThreshold: integer('reorder_threshold').notNull().default(10),
   ...timestamps,
 })
 
-export const stockLevels = sqliteTable('stock_levels', {
-  id: integer('id').primaryKey({ autoIncrement: true }),
+export const stockLevels = pgTable('stock_levels', {
+  id: serial('id').primaryKey(),
   productId: integer('product_id')
     .notNull()
     .references(() => products.id, { onDelete: 'cascade' }),
@@ -38,8 +42,8 @@ export const stockLevels = sqliteTable('stock_levels', {
 
 export const stockMovementType = ['reception', 'transfer_out', 'transfer_in', 'adjustment', 'sale'] as const
 
-export const stockMovements = sqliteTable('stock_movements', {
-  id: integer('id').primaryKey({ autoIncrement: true }),
+export const stockMovements = pgTable('stock_movements', {
+  id: serial('id').primaryKey(),
   type: text('type', { enum: stockMovementType }).notNull(),
   productId: integer('product_id')
     .notNull()
@@ -53,8 +57,8 @@ export const stockMovements = sqliteTable('stock_movements', {
   ...timestamps,
 })
 
-export const stockCounts = sqliteTable('stock_counts', {
-  id: integer('id').primaryKey({ autoIncrement: true }),
+export const stockCounts = pgTable('stock_counts', {
+  id: serial('id').primaryKey(),
   storeId: integer('store_id')
     .notNull()
     .references(() => stores.id, { onDelete: 'cascade' }),
@@ -70,8 +74,8 @@ export const stockCounts = sqliteTable('stock_counts', {
   ...timestamps,
 })
 
-export const clients = sqliteTable('clients', {
-  id: integer('id').primaryKey({ autoIncrement: true }),
+export const clients = pgTable('clients', {
+  id: serial('id').primaryKey(),
   name: text('name').notNull(),
   phone: text('phone'),
   storeId: integer('store_id').references(() => stores.id, { onDelete: 'set null' }),
@@ -80,21 +84,21 @@ export const clients = sqliteTable('clients', {
 
 export const salePaymentStatus = ['paid', 'partial', 'credit'] as const
 
-export const sales = sqliteTable('sales', {
-  id: integer('id').primaryKey({ autoIncrement: true }),
+export const sales = pgTable('sales', {
+  id: serial('id').primaryKey(),
   reference: text('reference').notNull().unique(),
   storeId: integer('store_id')
     .notNull()
     .references(() => stores.id, { onDelete: 'cascade' }),
   clientId: integer('client_id').references(() => clients.id, { onDelete: 'set null' }),
-  totalAmount: real('total_amount').notNull(),
-  costAmount: real('cost_amount').notNull(),
+  totalAmount: doublePrecision('total_amount').notNull(),
+  costAmount: doublePrecision('cost_amount').notNull(),
   paymentStatus: text('payment_status', { enum: salePaymentStatus }).notNull().default('paid'),
   ...timestamps,
 })
 
-export const saleItems = sqliteTable('sale_items', {
-  id: integer('id').primaryKey({ autoIncrement: true }),
+export const saleItems = pgTable('sale_items', {
+  id: serial('id').primaryKey(),
   saleId: integer('sale_id')
     .notNull()
     .references(() => sales.id, { onDelete: 'cascade' }),
@@ -102,13 +106,13 @@ export const saleItems = sqliteTable('sale_items', {
     .notNull()
     .references(() => products.id, { onDelete: 'restrict' }),
   quantity: integer('quantity').notNull(),
-  unitPrice: real('unit_price').notNull(),
+  unitPrice: doublePrecision('unit_price').notNull(),
 })
 
 export const paymentMethod = ['cash', 'mobile_money', 'bank_transfer', 'check'] as const
 
-export const payments = sqliteTable('payments', {
-  id: integer('id').primaryKey({ autoIncrement: true }),
+export const payments = pgTable('payments', {
+  id: serial('id').primaryKey(),
   clientId: integer('client_id')
     .notNull()
     .references(() => clients.id, { onDelete: 'cascade' }),
@@ -116,22 +120,22 @@ export const payments = sqliteTable('payments', {
   storeId: integer('store_id')
     .notNull()
     .references(() => stores.id, { onDelete: 'cascade' }),
-  amount: real('amount').notNull(),
+  amount: doublePrecision('amount').notNull(),
   method: text('method', { enum: paymentMethod }).notNull().default('cash'),
   ...timestamps,
 })
 
 export const receivableStatus = ['pending', 'paid', 'overdue'] as const
 
-export const receivables = sqliteTable('receivables', {
-  id: integer('id').primaryKey({ autoIncrement: true }),
+export const receivables = pgTable('receivables', {
+  id: serial('id').primaryKey(),
   clientId: integer('client_id')
     .notNull()
     .references(() => clients.id, { onDelete: 'cascade' }),
   saleId: integer('sale_id')
     .notNull()
     .references(() => sales.id, { onDelete: 'cascade' }),
-  amount: real('amount').notNull(),
+  amount: doublePrecision('amount').notNull(),
   dueDate: text('due_date').notNull(),
   status: text('status', { enum: receivableStatus }).notNull().default('pending'),
   ...timestamps,
@@ -139,8 +143,8 @@ export const receivables = sqliteTable('receivables', {
 
 export const transferStatus = ['pending', 'in_transit', 'completed'] as const
 
-export const transfers = sqliteTable('transfers', {
-  id: integer('id').primaryKey({ autoIncrement: true }),
+export const transfers = pgTable('transfers', {
+  id: serial('id').primaryKey(),
   reference: text('reference').notNull().unique(),
   fromStoreId: integer('from_store_id')
     .notNull()
@@ -152,8 +156,8 @@ export const transfers = sqliteTable('transfers', {
   ...timestamps,
 })
 
-export const transferItems = sqliteTable('transfer_items', {
-  id: integer('id').primaryKey({ autoIncrement: true }),
+export const transferItems = pgTable('transfer_items', {
+  id: serial('id').primaryKey(),
   transferId: integer('transfer_id')
     .notNull()
     .references(() => transfers.id, { onDelete: 'cascade' }),
@@ -163,15 +167,15 @@ export const transferItems = sqliteTable('transfer_items', {
   quantity: integer('quantity').notNull(),
 })
 
-export const suppliers = sqliteTable('suppliers', {
-  id: integer('id').primaryKey({ autoIncrement: true }),
+export const suppliers = pgTable('suppliers', {
+  id: serial('id').primaryKey(),
   name: text('name').notNull(),
   phone: text('phone'),
   ...timestamps,
 })
 
-export const supplierDeliveries = sqliteTable('supplier_deliveries', {
-  id: integer('id').primaryKey({ autoIncrement: true }),
+export const supplierDeliveries = pgTable('supplier_deliveries', {
+  id: serial('id').primaryKey(),
   supplierId: integer('supplier_id')
     .notNull()
     .references(() => suppliers.id, { onDelete: 'cascade' }),
@@ -183,41 +187,41 @@ export const supplierDeliveries = sqliteTable('supplier_deliveries', {
     .references(() => products.id, { onDelete: 'restrict' }),
   reference: text('reference'),
   sackCount: integer('sack_count').notNull(),
-  tonnage: real('tonnage'),
-  totalAmount: real('total_amount').notNull(),
+  tonnage: doublePrecision('tonnage'),
+  totalAmount: doublePrecision('total_amount').notNull(),
   ...timestamps,
 })
 
 export const supplierPayableStatus = ['pending', 'paid', 'overdue'] as const
 
-export const supplierPayables = sqliteTable('supplier_payables', {
-  id: integer('id').primaryKey({ autoIncrement: true }),
+export const supplierPayables = pgTable('supplier_payables', {
+  id: serial('id').primaryKey(),
   supplierId: integer('supplier_id')
     .notNull()
     .references(() => suppliers.id, { onDelete: 'cascade' }),
   deliveryId: integer('delivery_id')
     .notNull()
     .references(() => supplierDeliveries.id, { onDelete: 'cascade' }),
-  amount: real('amount').notNull(),
+  amount: doublePrecision('amount').notNull(),
   dueDate: text('due_date').notNull(),
   status: text('status', { enum: supplierPayableStatus }).notNull().default('pending'),
   ...timestamps,
 })
 
-export const supplierPayments = sqliteTable('supplier_payments', {
-  id: integer('id').primaryKey({ autoIncrement: true }),
+export const supplierPayments = pgTable('supplier_payments', {
+  id: serial('id').primaryKey(),
   supplierId: integer('supplier_id')
     .notNull()
     .references(() => suppliers.id, { onDelete: 'cascade' }),
-  amount: real('amount').notNull(),
+  amount: doublePrecision('amount').notNull(),
   method: text('method', { enum: paymentMethod }).notNull().default('cash'),
   ...timestamps,
 })
 
 export const discountPartyType = ['supplier', 'client'] as const
 
-export const discountScales = sqliteTable('discount_scales', {
-  id: integer('id').primaryKey({ autoIncrement: true }),
+export const discountScales = pgTable('discount_scales', {
+  id: serial('id').primaryKey(),
   partyType: text('party_type', { enum: discountPartyType }).notNull(),
   // Not FK-constrained — polymorphic across `clients`/`suppliers`, validated at the application layer,
   // matching the pattern already used by `stockCounts.countedBy`.
@@ -229,24 +233,24 @@ export const discountScales = sqliteTable('discount_scales', {
   ...timestamps,
 })
 
-export const discountTiers = sqliteTable('discount_tiers', {
-  id: integer('id').primaryKey({ autoIncrement: true }),
+export const discountTiers = pgTable('discount_tiers', {
+  id: serial('id').primaryKey(),
   scaleId: integer('scale_id')
     .notNull()
     .references(() => discountScales.id, { onDelete: 'cascade' }),
   thresholdSacks: integer('threshold_sacks').notNull(),
-  discountPerSack: real('discount_per_sack').notNull(),
+  discountPerSack: doublePrecision('discount_per_sack').notNull(),
 })
 
-export const discountApplications = sqliteTable('discount_applications', {
-  id: integer('id').primaryKey({ autoIncrement: true }),
+export const discountApplications = pgTable('discount_applications', {
+  id: serial('id').primaryKey(),
   scaleId: integer('scale_id')
     .notNull()
     .references(() => discountScales.id, { onDelete: 'cascade' }),
   period: text('period').notNull(),
   tierReached: integer('tier_reached'),
   sackCount: integer('sack_count').notNull(),
-  totalDiscount: real('total_discount').notNull(),
+  totalDiscount: doublePrecision('total_discount').notNull(),
   ...timestamps,
 })
 

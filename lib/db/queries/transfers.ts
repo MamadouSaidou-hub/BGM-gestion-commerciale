@@ -1,5 +1,5 @@
 import { and, desc, eq, gte, or, sql } from 'drizzle-orm'
-import { alias } from 'drizzle-orm/sqlite-core'
+import { alias } from 'drizzle-orm/pg-core'
 import { db } from '../client'
 import { stores, transferItems, transfers } from '../schema'
 import { periodRange, type PeriodKey } from '@/lib/period'

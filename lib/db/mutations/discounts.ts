@@ -86,9 +86,9 @@ export async function computeDiscount(partyType: PartyType, partyId: number, per
 }
 
 async function sacksSinceCycleStart(supplierId: number, cycleStartAt: string | null) {
-  // Strict `>`, not `>=` — SQLite's CURRENT_TIMESTAMP has 1-second resolution, so the delivery that
-  // triggers a grant and the cycleStartAt reset that follows it can land in the very same second. An
-  // inclusive bound would re-count that delivery into the very next cycle it just closed out.
+  // Strict `>`, not `>=` — a defensive margin in case a delivery and a cycleStartAt reset ever land in
+  // the same instant. An inclusive bound would re-count that delivery into the very next cycle it just
+  // closed out.
   const rows = await db
     .select({ sackCount: supplierDeliveries.sackCount })
     .from(supplierDeliveries)
@@ -131,15 +131,12 @@ export async function checkAndGrantSupplierCycle(supplierId: number) {
   if (!tierReached) return null
 
   const totalDiscount = sackCount * tierReached.discountPerSack
-  const now = new Date()
-  const nowIso = now.toISOString()
-  // `supplierDeliveries.createdAt` (like every other `timestamps` column) is populated by SQLite's
-  // `CURRENT_TIMESTAMP`, formatted "YYYY-MM-DD HH:MM:SS" (space, UTC, no fractional seconds) — NOT
-  // `Date#toISOString()`'s "YYYY-MM-DDTHH:MM:SS.sssZ". String-compared with `gte()`, those two formats
-  // sort inconsistently for timestamps on the same day (' ' < 'T' in ASCII), which silently excluded
-  // same-day deliveries from a freshly reset cycle. `cycleStartAt` must be stored in the SQLite-matching
-  // format so `sacksSinceCycleStart`'s comparison stays correct.
-  const cycleStartAt = nowIso.slice(0, 19).replace('T', ' ')
+  const nowIso = new Date().toISOString()
+  // `cycleStartAt` must be stored in the exact same format as `supplierDeliveries.createdAt` (both are
+  // `Date#toISOString()` now — see the shared `timestamps` helper in schema.ts) since they're compared
+  // as plain strings in `sacksSinceCycleStart`. Reformatting either one independently is exactly how the
+  // bgm-sqlite-timestamp-quirk bug happened before — don't reintroduce a second, diverging formatter.
+  const cycleStartAt = nowIso
 
   await db.insert(discountApplications).values({
     scaleId: scale.id,

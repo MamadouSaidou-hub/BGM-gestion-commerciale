@@ -21,25 +21,25 @@ Le fichier `.env.local` existe déjà à la racine (ignoré par git). S'il manqu
 cp .env.example .env.local
 ```
 
-Contenu attendu :
+Contenu attendu (base **Postgres**, ex: Supabase — voir `progress.md` section 7) :
 
 ```
-DATABASE_URL=file:./dev.db
+DATABASE_URL=postgresql://user:password@host:6543/postgres
 BETTER_AUTH_SECRET=<une chaîne aléatoire — générer avec: node -e "console.log(require('crypto').randomBytes(32).toString('base64'))">
 BETTER_AUTH_URL=http://localhost:3000
 ```
 
+Utiliser la chaîne de connexion **pooled** (mode *Transaction*, port 6543) fournie par Supabase, pas la connexion directe port 5432 — c'est celle adaptée aux environnements serverless (Vercel).
+
 ## 4. Base de données
 
-Le fichier `dev.db` (SQLite) existe déjà à la racine avec des données de test. Pour repartir de zéro :
+Aucune base locale préinstallée — il faut un projet Postgres (Supabase) déjà créé et son `DATABASE_URL` renseigné dans `.env.local` avant ces commandes :
 
 ```bash
 pnpm db:push        # applique le schéma (tables métier + auth)
 pnpm db:seed        # données de démo (magasins, produits, clients, ventes...)
 pnpm db:seed-admin  # crée le compte admin (voir identifiants section 6)
 ```
-
-⚠️ **Piège connu** : `pnpm db:push` échoue de façon fiable dès qu'on modifie la table `user` (ajout de colonne avec référence). Si ça arrive, voir `progress.md` section 6 pour la procédure de contournement (migration manuelle). Pour un premier `db:push` sur une base neuve, ça fonctionne normalement.
 
 Autres commandes utiles :
 
