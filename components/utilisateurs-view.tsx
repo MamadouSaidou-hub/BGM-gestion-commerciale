@@ -1,9 +1,10 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Plus, ShieldCheck, Users } from 'lucide-react'
+import { Pencil, Plus, ShieldCheck, Trash2, Users } from 'lucide-react'
 import { AppShell } from '@/components/app-shell'
 import { Modal } from '@/components/modal'
+import { authClient } from '@/lib/auth-client'
 
 type UserRow = { id: string; name: string; email: string; role: string; storeId: number | null; store: string }
 type StoreOption = { id: number; name: string }
@@ -83,11 +84,81 @@ function NewUserForm({ storeOptions, onCreated }: { storeOptions: StoreOption[];
   )
 }
 
+function EditUserForm({
+  targetUser,
+  storeOptions,
+  onSaved,
+}: {
+  targetUser: UserRow
+  storeOptions: StoreOption[]
+  onSaved: () => void
+}) {
+  const [role, setRole] = useState<'admin' | 'gestionnaire'>(targetUser.role === 'admin' ? 'admin' : 'gestionnaire')
+  const [storeId, setStoreId] = useState(targetUser.storeId ? String(targetUser.storeId) : '')
+  const [error, setError] = useState('')
+  const [submitting, setSubmitting] = useState(false)
+
+  useEffect(() => {
+    if (role === 'gestionnaire' && !storeId && storeOptions.length > 0) setStoreId(String(storeOptions[0].id))
+  }, [role, storeId, storeOptions])
+
+  async function handleSubmit(event: React.FormEvent) {
+    event.preventDefault()
+    setError('')
+    setSubmitting(true)
+    try {
+      const res = await fetch(`/api/utilisateurs/${targetUser.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ role, storeId: role === 'gestionnaire' ? storeId : null }),
+      })
+      const json = await res.json()
+      if (!res.ok) {
+        setError(json.error ?? 'Une erreur est survenue.')
+        return
+      }
+      onSaved()
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  return (
+    <form onSubmit={handleSubmit}>
+      {error && <p className="form-error">{error}</p>}
+      <div className="form-field"><label>Nom</label><input disabled value={targetUser.name} /></div>
+      <div className="form-field"><label>E-mail</label><input disabled value={targetUser.email} /></div>
+      <div className="form-row">
+        <div className="form-field">
+          <label>Rôle</label>
+          <select value={role} onChange={(event) => setRole(event.target.value as typeof role)}>
+            <option value="gestionnaire">Gestionnaire</option>
+            <option value="admin">Administrateur</option>
+          </select>
+        </div>
+        {role === 'gestionnaire' && (
+          <div className="form-field">
+            <label>Magasin</label>
+            <select required value={storeId} onChange={(event) => setStoreId(event.target.value)}>
+              {storeOptions.map((option) => <option key={option.id} value={option.id}>{option.name}</option>)}
+            </select>
+          </div>
+        )}
+      </div>
+      <div className="form-actions"><button type="submit" className="btn-primary" disabled={submitting}>{submitting ? 'Enregistrement...' : 'Enregistrer'}</button></div>
+    </form>
+  )
+}
+
 export function UtilisateursView() {
+  const { data: session } = authClient.useSession()
   const [users, setUsers] = useState<UserRow[]>([])
   const [storeOptions, setStoreOptions] = useState<StoreOption[]>([])
   const [loading, setLoading] = useState(true)
   const [modalOpen, setModalOpen] = useState(false)
+  const [editingUser, setEditingUser] = useState<UserRow | null>(null)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [deleteError, setDeleteError] = useState('')
   const [refreshKey, setRefreshKey] = useState(0)
 
   useEffect(() => {
@@ -111,6 +182,23 @@ export function UtilisateursView() {
   }, [refreshKey])
 
   const adminCount = users.filter((u) => u.role === 'admin').length
+  const currentUserId = session?.user?.id
+
+  async function handleDelete(id: string) {
+    setDeleteError('')
+    setDeletingId(id)
+    try {
+      const res = await fetch(`/api/utilisateurs/${id}`, { method: 'DELETE' })
+      const json = await res.json()
+      if (!res.ok) {
+        setDeleteError(json.error ?? 'Une erreur est survenue.')
+        return
+      }
+      setRefreshKey((key) => key + 1)
+    } finally {
+      setDeletingId(null)
+    }
+  }
 
   return (
     <AppShell breadcrumb="Administration" section="Utilisateurs">
@@ -128,6 +216,8 @@ export function UtilisateursView() {
         <button className="btn-primary" onClick={() => setModalOpen(true)}><Plus size={14} /> Nouvel utilisateur</button>
       </div>
 
+      {deleteError && <p className="form-error">{deleteError}</p>}
+
       <div className="table-panel">
         <div className="table-scroll">
           <table className="data-table">
@@ -137,17 +227,46 @@ export function UtilisateursView() {
                 <th>E-mail</th>
                 <th>Rôle</th>
                 <th>Magasin</th>
+                <th></th>
               </tr>
             </thead>
             <tbody>
-              {users.map((row) => (
-                <tr key={row.id}>
-                  <td data-label="Nom">{row.name}</td>
-                  <td data-label="E-mail">{row.email}</td>
-                  <td data-label="Rôle"><span className={`badge ${roleBadge[row.role] ?? 'badge-muted'}`}>{roleLabel[row.role] ?? row.role}</span></td>
-                  <td data-label="Magasin">{row.role === 'admin' ? 'Tous les magasins' : row.store}</td>
-                </tr>
-              ))}
+              {users.map((row) => {
+                const isSelf = row.id === currentUserId
+                return (
+                  <tr key={row.id}>
+                    <td data-label="Nom">{row.name}</td>
+                    <td data-label="E-mail">{row.email}</td>
+                    <td data-label="Rôle"><span className={`badge ${roleBadge[row.role] ?? 'badge-muted'}`}>{roleLabel[row.role] ?? row.role}</span></td>
+                    <td data-label="Magasin">{row.role === 'admin' ? 'Tous les magasins' : row.store}</td>
+                    <td data-label="" style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
+                      <button
+                        type="button"
+                        className="icon-button"
+                        title="Modifier"
+                        aria-label={`Modifier ${row.name}`}
+                        onClick={() => setEditingUser(row)}
+                      >
+                        <Pencil size={14} />
+                      </button>
+                      <button
+                        type="button"
+                        className="icon-button"
+                        title={isSelf ? 'Vous ne pouvez pas supprimer votre propre compte' : 'Supprimer'}
+                        aria-label={`Supprimer ${row.name}`}
+                        disabled={isSelf || deletingId === row.id}
+                        onClick={() => {
+                          if (window.confirm(`Supprimer le compte de ${row.name} ? Cette action est irréversible.`)) {
+                            handleDelete(row.id)
+                          }
+                        }}
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </td>
+                  </tr>
+                )
+              })}
             </tbody>
           </table>
           {!loading && users.length === 0 && <p className="table-empty">Aucun utilisateur.</p>}
@@ -162,6 +281,19 @@ export function UtilisateursView() {
             setRefreshKey((key) => key + 1)
           }}
         />
+      </Modal>
+
+      <Modal open={editingUser !== null} onClose={() => setEditingUser(null)} title="Modifier l’utilisateur" subtitle="Changez le rôle ou le magasin assigné.">
+        {editingUser && (
+          <EditUserForm
+            targetUser={editingUser}
+            storeOptions={storeOptions}
+            onSaved={() => {
+              setEditingUser(null)
+              setRefreshKey((key) => key + 1)
+            }}
+          />
+        )}
       </Modal>
     </AppShell>
   )
