@@ -21,16 +21,127 @@ export async function getDashboardData(period: PeriodKey, storeName: string | nu
   const { start, previousStart } = periodRange(period)
   const storeId = await resolveStoreId(storeName)
   const storeFilter = storeId ? eq(sales.storeId, storeId) : undefined
+  const stockFilter = storeId ? eq(stockLevels.storeId, storeId) : undefined
 
-  const currentSalesRows = await db
-    .select({ total: sales.totalAmount, cost: sales.costAmount })
-    .from(sales)
-    .where(and(gte(sales.createdAt, start.toISOString()), storeFilter))
+  const dayLabels = ['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam']
+  const dayRanges = Array.from({ length: 7 }, (_, index) => {
+    const dayStart = new Date()
+    dayStart.setHours(0, 0, 0, 0)
+    dayStart.setDate(dayStart.getDate() - (6 - index))
+    const dayEnd = new Date(dayStart)
+    dayEnd.setDate(dayEnd.getDate() + 1)
+    return { dayStart, dayEnd }
+  })
 
-  const previousSalesRows = await db
-    .select({ total: sales.totalAmount, cost: sales.costAmount })
-    .from(sales)
-    .where(and(gte(sales.createdAt, previousStart.toISOString()), lt(sales.createdAt, start.toISOString()), storeFilter))
+  // All of the following are independent reads — running them concurrently instead of one `await` at a
+  // time turns N sequential network round-trips to Supabase into 1 (the slowest of them), which matters
+  // once the DB is no longer an in-process SQLite file.
+  const [
+    currentSalesRows,
+    previousSalesRows,
+    stockRows,
+    receivableRows,
+    salesTrendRows,
+    storeRevenueRows,
+    recentSales,
+    recentMovements,
+    recentPayments,
+    recentTransfer,
+    pendingTransferRows,
+  ] = await Promise.all([
+    db
+      .select({ total: sales.totalAmount, cost: sales.costAmount })
+      .from(sales)
+      .where(and(gte(sales.createdAt, start.toISOString()), storeFilter)),
+    db
+      .select({ total: sales.totalAmount, cost: sales.costAmount })
+      .from(sales)
+      .where(and(gte(sales.createdAt, previousStart.toISOString()), lt(sales.createdAt, start.toISOString()), storeFilter)),
+    db
+      .select({
+        quantity: stockLevels.quantity,
+        threshold: products.reorderThreshold,
+      })
+      .from(stockLevels)
+      .innerJoin(products, eq(stockLevels.productId, products.id))
+      .where(stockFilter),
+    db
+      .select({ amount: receivables.amount, clientId: receivables.clientId })
+      .from(receivables)
+      .innerJoin(sales, eq(receivables.saleId, sales.id))
+      .where(storeId ? and(eq(sales.storeId, storeId), eq(receivables.status, 'overdue')) : eq(receivables.status, 'overdue')),
+    Promise.all(
+      dayRanges.map(({ dayStart, dayEnd }) =>
+        db
+          .select({ total: sales.totalAmount })
+          .from(sales)
+          .where(and(gte(sales.createdAt, dayStart.toISOString()), lt(sales.createdAt, dayEnd.toISOString()), storeFilter))
+          .then((rows) => ({ day: dayLabels[dayStart.getDay()], value: rows.reduce((sum, row) => sum + row.total, 0) })),
+      ),
+    ),
+    db
+      .select({
+        storeId: sales.storeId,
+        storeName: stores.name,
+        total: sql<number>`sum(${sales.totalAmount})`.mapWith(Number),
+      })
+      .from(sales)
+      .innerJoin(stores, eq(sales.storeId, stores.id))
+      .where(gte(sales.createdAt, start.toISOString()))
+      .groupBy(sales.storeId, stores.name),
+    db
+      .select({
+        reference: sales.reference,
+        total: sales.totalAmount,
+        createdAt: sales.createdAt,
+        storeName: stores.name,
+      })
+      .from(sales)
+      .innerJoin(stores, eq(sales.storeId, stores.id))
+      .where(storeFilter)
+      .orderBy(desc(sales.createdAt))
+      .limit(2),
+    db
+      .select({
+        type: stockMovements.type,
+        quantity: stockMovements.quantity,
+        reference: stockMovements.reference,
+        createdAt: stockMovements.createdAt,
+        storeName: stores.name,
+      })
+      .from(stockMovements)
+      .innerJoin(stores, eq(stockMovements.storeId, stores.id))
+      .where(storeId ? eq(stockMovements.storeId, storeId) : undefined)
+      .orderBy(desc(stockMovements.createdAt))
+      .limit(2),
+    db
+      .select({
+        amount: payments.amount,
+        createdAt: payments.createdAt,
+        clientName: clients.name,
+      })
+      .from(payments)
+      .innerJoin(clients, eq(payments.clientId, clients.id))
+      .where(storeId ? eq(payments.storeId, storeId) : undefined)
+      .orderBy(desc(payments.createdAt))
+      .limit(1),
+    db
+      .select({
+        reference: transfers.reference,
+        status: transfers.status,
+        createdAt: transfers.createdAt,
+        fromStoreName: stores.name,
+      })
+      .from(transfers)
+      .innerJoin(stores, eq(transfers.fromStoreId, stores.id))
+      .orderBy(desc(transfers.createdAt))
+      .limit(1),
+    db
+      .select({ reference: transfers.reference, toStoreId: transfers.toStoreId })
+      .from(transfers)
+      .where(eq(transfers.status, 'in_transit'))
+      .limit(1),
+  ])
 
   const revenue = currentSalesRows.reduce((sum, row) => sum + row.total, 0)
   const previousRevenue = previousSalesRows.reduce((sum, row) => sum + row.total, 0)
@@ -38,53 +149,13 @@ export async function getDashboardData(period: PeriodKey, storeName: string | nu
   const previousMargin = previousSalesRows.reduce((sum, row) => sum + (row.total - row.cost), 0)
   const marginPct = revenue > 0 ? (margin / revenue) * 100 : 0
 
-  const stockFilter = storeId ? eq(stockLevels.storeId, storeId) : undefined
-  const stockRows = await db
-    .select({
-      quantity: stockLevels.quantity,
-      threshold: products.reorderThreshold,
-    })
-    .from(stockLevels)
-    .innerJoin(products, eq(stockLevels.productId, products.id))
-    .where(stockFilter)
-
   const lowStockRows = stockRows.filter((row) => row.quantity <= row.threshold)
   const criticalStockCount = lowStockRows.filter((row) => row.quantity <= row.threshold / 2).length
-
-  const receivableRows = await db
-    .select({ amount: receivables.amount, clientId: receivables.clientId })
-    .from(receivables)
-    .innerJoin(sales, eq(receivables.saleId, sales.id))
-    .where(storeId ? and(eq(sales.storeId, storeId), eq(receivables.status, 'overdue')) : eq(receivables.status, 'overdue'))
 
   const totalReceivables = receivableRows.reduce((sum, row) => sum + row.amount, 0)
   const distinctClients = new Set(receivableRows.map((row) => row.clientId)).size
 
-  const salesTrend: { day: string; value: number }[] = []
-  const dayLabels = ['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam']
-  for (let i = 6; i >= 0; i--) {
-    const dayStart = new Date()
-    dayStart.setHours(0, 0, 0, 0)
-    dayStart.setDate(dayStart.getDate() - i)
-    const dayEnd = new Date(dayStart)
-    dayEnd.setDate(dayEnd.getDate() + 1)
-    const rows = await db
-      .select({ total: sales.totalAmount })
-      .from(sales)
-      .where(and(gte(sales.createdAt, dayStart.toISOString()), lt(sales.createdAt, dayEnd.toISOString()), storeFilter))
-    salesTrend.push({ day: dayLabels[dayStart.getDay()], value: rows.reduce((sum, row) => sum + row.total, 0) })
-  }
-
-  const storeRevenueRows = await db
-    .select({
-      storeId: sales.storeId,
-      storeName: stores.name,
-      total: sql<number>`sum(${sales.totalAmount})`.mapWith(Number),
-    })
-    .from(sales)
-    .innerJoin(stores, eq(sales.storeId, stores.id))
-    .where(gte(sales.createdAt, start.toISOString()))
-    .groupBy(sales.storeId, stores.name)
+  const salesTrend = salesTrendRows
 
   const totalAllStores = storeRevenueRows.reduce((sum, row) => sum + row.total, 0)
   const storePerformance = storeRevenueRows
@@ -94,57 +165,6 @@ export async function getDashboardData(period: PeriodKey, storeName: string | nu
       pct: totalAllStores > 0 ? Math.round((row.total / totalAllStores) * 100) : 0,
     }))
     .sort((a, b) => b.amount - a.amount)
-
-  const recentSales = await db
-    .select({
-      reference: sales.reference,
-      total: sales.totalAmount,
-      createdAt: sales.createdAt,
-      storeName: stores.name,
-    })
-    .from(sales)
-    .innerJoin(stores, eq(sales.storeId, stores.id))
-    .where(storeFilter)
-    .orderBy(desc(sales.createdAt))
-    .limit(2)
-
-  const recentMovements = await db
-    .select({
-      type: stockMovements.type,
-      quantity: stockMovements.quantity,
-      reference: stockMovements.reference,
-      createdAt: stockMovements.createdAt,
-      storeName: stores.name,
-    })
-    .from(stockMovements)
-    .innerJoin(stores, eq(stockMovements.storeId, stores.id))
-    .where(storeId ? eq(stockMovements.storeId, storeId) : undefined)
-    .orderBy(desc(stockMovements.createdAt))
-    .limit(2)
-
-  const recentPayments = await db
-    .select({
-      amount: payments.amount,
-      createdAt: payments.createdAt,
-      clientName: clients.name,
-    })
-    .from(payments)
-    .innerJoin(clients, eq(payments.clientId, clients.id))
-    .where(storeId ? eq(payments.storeId, storeId) : undefined)
-    .orderBy(desc(payments.createdAt))
-    .limit(1)
-
-  const recentTransfer = await db
-    .select({
-      reference: transfers.reference,
-      status: transfers.status,
-      createdAt: transfers.createdAt,
-      fromStoreName: stores.name,
-    })
-    .from(transfers)
-    .innerJoin(stores, eq(transfers.fromStoreId, stores.id))
-    .orderBy(desc(transfers.createdAt))
-    .limit(1)
 
   const activity: Activity[] = []
 
@@ -207,11 +227,7 @@ export async function getDashboardData(period: PeriodKey, storeName: string | nu
       tone: 'blue',
     })
   }
-  const [pendingTransfer] = await db
-    .select({ reference: transfers.reference, toStoreId: transfers.toStoreId })
-    .from(transfers)
-    .where(eq(transfers.status, 'in_transit'))
-    .limit(1)
+  const pendingTransfer = pendingTransferRows[0]
   if (pendingTransfer) {
     const [toStore] = await db.select({ name: stores.name }).from(stores).where(eq(stores.id, pendingTransfer.toStoreId))
     alerts.push({

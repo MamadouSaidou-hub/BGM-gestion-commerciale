@@ -9,45 +9,46 @@ export async function getTreasuryOverview(period: PeriodKey, storeName: string |
   const { start } = periodRange(period)
   const storeId = await resolveStoreId(storeName)
 
-  const paymentRows = await db
-    .select({
-      amount: payments.amount,
-      method: payments.method,
-      createdAt: payments.createdAt,
-      storeName: stores.name,
-      clientName: clients.name,
-    })
-    .from(payments)
-    .innerJoin(stores, eq(payments.storeId, stores.id))
-    .innerJoin(clients, eq(payments.clientId, clients.id))
-    .where(and(gte(payments.createdAt, start.toISOString()), storeId ? eq(payments.storeId, storeId) : undefined))
-    .orderBy(desc(payments.createdAt))
-
-  const salesRows = await db
-    .select({ total: sales.totalAmount, status: sales.paymentStatus })
-    .from(sales)
-    .where(and(gte(sales.createdAt, start.toISOString()), storeId ? eq(sales.storeId, storeId) : undefined))
+  // Independent reads — run concurrently rather than one `await` at a time (see the same fix in
+  // dashboard.ts for why this matters once the DB is a remote Supabase instance, not in-process SQLite).
+  const [paymentRows, salesRows, receivableRows, supplierPaymentRows, supplierPayableRows] = await Promise.all([
+    db
+      .select({
+        amount: payments.amount,
+        method: payments.method,
+        createdAt: payments.createdAt,
+        storeName: stores.name,
+        clientName: clients.name,
+      })
+      .from(payments)
+      .innerJoin(stores, eq(payments.storeId, stores.id))
+      .innerJoin(clients, eq(payments.clientId, clients.id))
+      .where(and(gte(payments.createdAt, start.toISOString()), storeId ? eq(payments.storeId, storeId) : undefined))
+      .orderBy(desc(payments.createdAt)),
+    db
+      .select({ total: sales.totalAmount, status: sales.paymentStatus })
+      .from(sales)
+      .where(and(gte(sales.createdAt, start.toISOString()), storeId ? eq(sales.storeId, storeId) : undefined)),
+    db
+      .select({ amount: receivables.amount, status: receivables.status, storeId: sales.storeId })
+      .from(receivables)
+      .innerJoin(sales, eq(receivables.saleId, sales.id)),
+    // Supplier-side figures are store-agnostic (the supplier relationship is managed centrally, not per-store).
+    db
+      .select({ amount: supplierPayments.amount })
+      .from(supplierPayments)
+      .where(gte(supplierPayments.createdAt, start.toISOString())),
+    db.select({ amount: supplierPayables.amount, status: supplierPayables.status }).from(supplierPayables),
+  ])
 
   const cashSales = salesRows.filter((row) => row.status === 'paid').reduce((sum, row) => sum + row.total, 0)
   const totalPayments = paymentRows.reduce((sum, row) => sum + row.amount, 0)
-
-  const receivableRows = await db
-    .select({ amount: receivables.amount, status: receivables.status, storeId: sales.storeId })
-    .from(receivables)
-    .innerJoin(sales, eq(receivables.saleId, sales.id))
 
   const outstandingReceivables = receivableRows
     .filter((row) => row.status !== 'paid' && (!storeId || row.storeId === storeId))
     .reduce((sum, row) => sum + row.amount, 0)
 
-  // Supplier-side figures are store-agnostic (the supplier relationship is managed centrally, not per-store).
-  const supplierPaymentRows = await db
-    .select({ amount: supplierPayments.amount })
-    .from(supplierPayments)
-    .where(gte(supplierPayments.createdAt, start.toISOString()))
   const totalSupplierPayments = supplierPaymentRows.reduce((sum, row) => sum + row.amount, 0)
-
-  const supplierPayableRows = await db.select({ amount: supplierPayables.amount, status: supplierPayables.status }).from(supplierPayables)
   const outstandingPayables = supplierPayableRows.filter((row) => row.status !== 'paid').reduce((sum, row) => sum + row.amount, 0)
 
   return {

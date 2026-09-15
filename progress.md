@@ -78,7 +78,8 @@ Voir `README.md` pour en créer d'autres.
 - **Remise par palier** : calcul déclenché manuellement (bouton "Calculer"), pas de tâche planifiée à minuit — aucune infra de cron dans l'appli. Un vrai calcul automatique en fin de mois nécessiterait un scheduler externe (ex: Vercel Cron) appelant `computeDiscount` pour chaque barème.
 - **Rapports** : page existante mais pas d'export CSV dessus (contrairement aux 5 autres pages).
 - **Tests automatisés** : un socle existe désormais (voir section 8) — `lib/session.ts` (unitaire) + ventes/transferts/remise fournisseur (intégration). Pas de couverture e2e navigateur, pas de tests sur les autres mutations (paiements, comptage physique, etc.).
-- **Requêtes séquentielles non parallélisées** (`lib/db/queries/dashboard.ts`, `treasury.ts`) : plusieurs `await` indépendants enchaînés au lieu d'un `Promise.all` — coûtait peu avec SQLite embarqué, coûte un vrai aller-retour réseau par requête avec Postgres distant. `getTransfersList` utilise aussi 2 sous-requêtes corrélées par ligne au lieu d'un JOIN/GROUP BY. Identifié lors de l'audit du 04/09, pas encore corrigé — à faire si le temps de chargement du tableau de bord/trésorerie devient sensible.
+- ~~Requêtes séquentielles non parallélisées (`dashboard.ts`, `treasury.ts`)~~ — **corrigé le 15/09** (voir section 9).
+- `getTransfersList` utilise encore 2 sous-requêtes corrélées par ligne (SQL) au lieu d'un JOIN/GROUP BY — c'est une seule requête réseau donc peu prioritaire, mais un JOIN serait plus propre si retouché un jour.
 
 ## 6. Pièges connus (à lire avant de toucher au schéma ou à l'auth)
 
@@ -124,3 +125,11 @@ Une fois la bonne URL trouvée : `db:push` (22 tables créées), `db:seed`, `db:
 **Piège rencontré** : `pnpm db:push`/`db:seed` échouent avec `DATABASE_URL is not set` quand lancés directement depuis PowerShell, car `drizzle.config.ts` lit `process.env.DATABASE_URL` sans jamais charger `.env.local` lui-même (Next.js le fait automatiquement en dev, mais pas les scripts CLI). Contournement utilisé : injecter les variables de `.env.local` dans l'environnement PowerShell avant d'appeler la commande (`Get-Content .env.local | ... SetEnvironmentVariable`). À reproduire à l'identique si `db:push`/`db:seed`/`db:seed-admin` sont relancés manuellement hors de `next dev`.
 
 **Vérifié en conditions réelles** : après `db:push` + `db:seed`, connexion admin via `pnpm dev` pointé sur la vraie base, catalogue confirmé 100% farine via `/api/products`, et une vente en tonnes testée bout-en-bout via l'API réelle (0.5 tonne d'un produit à 25kg/sac → 20 sacs déduits du stock, montant total correct).
+
+**Déploiement Vercel** : après le push, l'utilisateur a rencontré une erreur "Invalid origin" de better-auth au login en prod — cause : `BETTER_AUTH_URL` sur Vercel ne correspondait pas à l'URL réelle du déploiement (`https://bgm-gestion-commerciale.vercel.app`). Corrigé en éditant la variable d'env sur Vercel (Project Settings → Environment Variables → "..." sur la ligne → Edit) puis en relançant un déploiement (les variables d'env ne s'appliquent qu'au prochain build, pas rétroactivement).
+
+## 9. Parallélisation des requêtes dashboard/trésorerie (15/09/2026)
+
+`lib/db/queries/dashboard.ts` et `treasury.ts` enchaînaient une dizaine de `await` indépendants les uns après les autres — chacun un aller-retour réseau complet vers Supabase. Remplacé par un seul `Promise.all` par fichier regroupant toutes les requêtes qui ne dépendent pas les unes des autres (y compris la boucle des 7 jours de `salesTrend`, auparavant 7 requêtes séquentielles, désormais lancées en parallèle). Seule exception laissée séquentielle : la requête du nom du magasin de destination d'un transfert en cours, qui dépend du résultat de la requête précédente (`pendingTransfer.toStoreId`) — un seul cas, coût négligeable.
+
+Vérifié : `tsc` propre, les 17 tests Vitest toujours verts, et un test manuel via `pnpm dev` confirmant que `/api/dashboard` et `/api/tresorerie` renvoient des données identiques (mêmes montants, même tendance sur 7 jours) après le changement.
