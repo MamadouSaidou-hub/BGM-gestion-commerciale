@@ -146,7 +146,6 @@ export function AppShell({
           ))}
         </nav>
         <div className="sidebar-footer">
-          <AppearanceMenu />
           <UserChip />
         </div>
       </aside>
@@ -156,6 +155,7 @@ export function AppShell({
           <button className="mobile-menu" onClick={() => setMenuOpen(true)} aria-label="Ouvrir le menu"><Menu /></button>
           <div className="breadcrumb"><span>{breadcrumb}</span><strong>{section}</strong></div>
           <div className="topbar-actions">
+            <AppearanceMenu variant="topbar" />
             {searchOpen && <input className="search-input" autoFocus placeholder="Rechercher..." aria-label="Rechercher" />}
             <button className="icon-button" onClick={() => setSearchOpen(!searchOpen)} aria-label="Rechercher"><Search /></button>
             <button className="icon-button notification-button" aria-label="Notifications"><Bell /><span /></button>

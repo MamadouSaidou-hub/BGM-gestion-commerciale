@@ -11,7 +11,7 @@ const themeOptions: { mode: ThemeMode; label: string; icon: typeof Sun }[] = [
   { mode: 'system', label: 'Système', icon: Laptop },
 ]
 
-export function AppearanceMenu() {
+export function AppearanceMenu({ variant = 'sidebar' }: { variant?: 'sidebar' | 'topbar' }) {
   const [open, setOpen] = useState(false)
   const [accent, setAccent] = useState<string>('')
   const [theme, setTheme] = useState<ThemeMode>('system')
@@ -47,29 +47,37 @@ export function AppearanceMenu() {
     }
   }
 
+  const isTopbar = variant === 'topbar'
+
   return (
     <div style={{ position: 'relative' }}>
-      <button
-        type="button"
-        className="nav-link"
-        style={{ width: '100%', border: 0, background: 'none', cursor: 'pointer', font: 'inherit', textAlign: 'left' }}
-        onClick={() => setOpen((value) => !value)}
-      >
-        <Palette />Apparence
-      </button>
+      {isTopbar ? (
+        <button type="button" className="icon-button" onClick={() => setOpen((value) => !value)} aria-label="Apparence">
+          <Palette />
+        </button>
+      ) : (
+        <button
+          type="button"
+          className="nav-link"
+          style={{ width: '100%', border: 0, background: 'none', cursor: 'pointer', font: 'inherit', textAlign: 'left' }}
+          onClick={() => setOpen((value) => !value)}
+        >
+          <Palette />Apparence
+        </button>
+      )}
       {open && (
         <div
           style={{
             position: 'absolute',
-            bottom: '100%',
-            left: 0,
-            right: 0,
+            ...(isTopbar
+              ? { top: '100%', right: 0, marginTop: 6, width: 220 }
+              : { bottom: '100%', left: 0, right: 0, marginBottom: 6 }),
             background: 'var(--card)',
             border: '1px solid var(--border)',
             borderRadius: 8,
-            marginBottom: 6,
             padding: 12,
             boxShadow: '0 4px 14px rgba(16,25,41,.25)',
+            zIndex: 20,
           }}
         >
           <p style={{ fontSize: 9, fontWeight: 700, color: 'var(--faint)', letterSpacing: '.06em', textTransform: 'uppercase', margin: '0 0 8px' }}>Thème</p>
