@@ -31,10 +31,10 @@
 .due-banner-overdue { background: var(--tint-red); color: var(--red); }
 .due-banner-upcoming { background: var(--tint-orange); color: var(--orange); }
 .due-banner-more { font-size: 10px; color: var(--faint); padding: 0 12px; }
-@theme inline { --color-background: var(--background); --color-foreground: var(--foreground); --color-card: var(--card); --color-border: var(--border); --color-muted-foreground: var(--muted); --color-primary: var(--primary); --font-sans: 'Inter', Arial, sans-serif; }
+@theme inline { --color-background: var(--background); --color-foreground: var(--foreground); --color-card: var(--card); --color-border: var(--border); --color-muted-foreground: var(--muted); --color-primary: var(--primary); --font-sans: var(--font-inter), Arial, sans-serif; }
 * { box-sizing: border-box; }
 html { background: var(--background); }
-body { margin: 0; background: var(--background); color: var(--foreground); font-family: Arial, sans-serif; }
+body { margin: 0; background: var(--background); color: var(--foreground); font-family: var(--font-sans); }
 button, select, input { font: inherit; }
 button, a, select { -webkit-tap-highlight-color: transparent; }
 .app-frame { min-height: 100vh; display: flex; }
