@@ -25,8 +25,8 @@ type SalesData = {
 
 type StoreOption = { id: number; name: string }
 type ClientOption = { id: number; name: string }
-type ProductOption = { id: number; name: string; sku: string; unitPrice: number }
-type ItemRow = { productId: string; quantity: string; unitPrice: string }
+type ProductOption = { id: number; name: string; sku: string; unitPrice: number; sackWeightKg: number | null }
+type ItemRow = { productId: string; quantity: string; unitPrice: string; unit: 'sack' | 'tonne'; tonnage: string }
 
 const statusLabel = { paid: 'Payée', partial: 'Partielle', credit: 'Crédit' }
 const statusBadge = { paid: 'badge-green', partial: 'badge-orange', credit: 'badge-blue' }
@@ -57,7 +57,7 @@ function NewSaleForm({
   const [paymentStatus, setPaymentStatus] = useState<'paid' | 'partial' | 'credit'>('paid')
   const [paidNow, setPaidNow] = useState('')
   const [dueInDays, setDueInDays] = useState('15')
-  const [items, setItems] = useState<ItemRow[]>([{ productId: '', quantity: '1', unitPrice: '' }])
+  const [items, setItems] = useState<ItemRow[]>([{ productId: '', quantity: '1', unitPrice: '', unit: 'sack', tonnage: '' }])
   const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
 
@@ -66,7 +66,17 @@ function NewSaleForm({
   }, [storeOptions, storeId])
 
   const productMap = useMemo(() => new Map(productOptions.map((product) => [String(product.id), product])), [productOptions])
-  const total = items.reduce((sum, item) => sum + (Number(item.quantity) || 0) * (Number(item.unitPrice) || 0), 0)
+
+  function effectiveSacks(item: ItemRow) {
+    if (item.unit === 'tonne') {
+      const product = productMap.get(item.productId)
+      if (!product?.sackWeightKg) return 0
+      return Math.round(((Number(item.tonnage) || 0) * 1000) / product.sackWeightKg)
+    }
+    return Number(item.quantity) || 0
+  }
+
+  const total = items.reduce((sum, item) => sum + effectiveSacks(item) * (Number(item.unitPrice) || 0), 0)
 
   function updateItem(index: number, patch: Partial<ItemRow>) {
     setItems((rows) => rows.map((row, i) => (i === index ? { ...row, ...patch } : row)))
@@ -74,11 +84,11 @@ function NewSaleForm({
 
   function handleProductChange(index: number, productId: string) {
     const product = productMap.get(productId)
-    updateItem(index, { productId, unitPrice: product ? String(product.unitPrice) : '' })
+    updateItem(index, { productId, unitPrice: product ? String(product.unitPrice) : '', unit: 'sack', tonnage: '' })
   }
 
   function addItem() {
-    setItems((rows) => [...rows, { productId: '', quantity: '1', unitPrice: '' }])
+    setItems((rows) => [...rows, { productId: '', quantity: '1', unitPrice: '', unit: 'sack', tonnage: '' }])
   }
 
   function removeItem(index: number) {
@@ -103,7 +113,13 @@ function NewSaleForm({
           paymentStatus,
           paidNow: paymentStatus === 'partial' ? paidNow : 0,
           dueInDays,
-          items: items.map((item) => ({ productId: item.productId, quantity: item.quantity, unitPrice: item.unitPrice })),
+          items: items.map((item) => ({
+            productId: item.productId,
+            quantity: item.unit === 'tonne' ? effectiveSacks(item) : item.quantity,
+            unitPrice: item.unitPrice,
+            unit: item.unit,
+            tonnage: item.unit === 'tonne' ? item.tonnage : undefined,
+          })),
         }),
       })
       const json = await res.json()
@@ -137,19 +153,55 @@ function NewSaleForm({
       </div>
 
       <label style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', display: 'block', marginBottom: 6 }}>Articles</label>
-      {items.map((item, index) => (
-        <div className="item-row-grid" key={index}>
-          <div className="form-field" style={{ marginBottom: 0 }}>
-            <select required value={item.productId} onChange={(event) => handleProductChange(index, event.target.value)}>
-              <option value="">Sélectionner...</option>
-              {productOptions.map((option) => <option key={option.id} value={option.id}>{option.name}</option>)}
-            </select>
+      {items.map((item, index) => {
+        const product = productMap.get(item.productId)
+        const canUseTonne = Boolean(product?.sackWeightKg)
+        return (
+          <div key={index} style={{ marginBottom: 10 }}>
+            <div className="item-row-grid">
+              <div className="form-field" style={{ marginBottom: 0 }}>
+                <select required value={item.productId} onChange={(event) => handleProductChange(index, event.target.value)}>
+                  <option value="">Sélectionner...</option>
+                  {productOptions.map((option) => <option key={option.id} value={option.id}>{option.name}</option>)}
+                </select>
+              </div>
+              {item.unit === 'tonne' ? (
+                <div className="form-field" style={{ marginBottom: 0 }}>
+                  <input required type="number" min="0.01" step="0.01" placeholder="Tonnage" value={item.tonnage} onChange={(event) => updateItem(index, { tonnage: event.target.value })} />
+                </div>
+              ) : (
+                <div className="form-field" style={{ marginBottom: 0 }}>
+                  <input required type="number" min="1" placeholder="Qté (sacs)" value={item.quantity} onChange={(event) => updateItem(index, { quantity: event.target.value })} />
+                </div>
+              )}
+              <div className="form-field" style={{ marginBottom: 0 }}><input required type="number" min="0" placeholder="Prix" value={item.unitPrice} onChange={(event) => updateItem(index, { unitPrice: event.target.value })} /></div>
+              <button type="button" className="item-row-remove" onClick={() => removeItem(index)} disabled={items.length === 1} aria-label="Retirer la ligne"><Trash2 size={14} /></button>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 4 }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, color: 'var(--muted)' }}>
+                <input
+                  type="radio"
+                  name={`unit-${index}`}
+                  checked={item.unit === 'sack'}
+                  onChange={() => updateItem(index, { unit: 'sack', tonnage: '' })}
+                /> Sac
+              </label>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, color: canUseTonne ? 'var(--muted)' : 'var(--muted-light, #ccc)' }}>
+                <input
+                  type="radio"
+                  name={`unit-${index}`}
+                  disabled={!canUseTonne}
+                  checked={item.unit === 'tonne'}
+                  onChange={() => updateItem(index, { unit: 'tonne', quantity: '' })}
+                /> Tonne
+              </label>
+              {item.unit === 'tonne' && (
+                <span style={{ fontSize: 12, color: 'var(--muted)' }}>≈ {effectiveSacks(item)} sac(s)</span>
+              )}
+            </div>
           </div>
-          <div className="form-field" style={{ marginBottom: 0 }}><input required type="number" min="1" placeholder="Qté" value={item.quantity} onChange={(event) => updateItem(index, { quantity: event.target.value })} /></div>
-          <div className="form-field" style={{ marginBottom: 0 }}><input required type="number" min="0" placeholder="Prix" value={item.unitPrice} onChange={(event) => updateItem(index, { unitPrice: event.target.value })} /></div>
-          <button type="button" className="item-row-remove" onClick={() => removeItem(index)} disabled={items.length === 1} aria-label="Retirer la ligne"><Trash2 size={14} /></button>
-        </div>
-      ))}
+        )
+      })}
       <button type="button" className="item-add-link" onClick={addItem}><Plus size={13} /> Ajouter un article</button>
 
       <div className="sale-total-row"><span>Total</span><span>{total.toLocaleString('fr-FR')} FCFA</span></div>

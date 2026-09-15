@@ -77,7 +77,7 @@ Voir `README.md` pour en créer d'autres.
 - **Pas de sélecteur de méthode de paiement à la vente** — `createSale` force `method: 'cash'` pour la part payée immédiatement d'une vente partielle. À ajouter si besoin de distinguer OM/virement/chèque dès la vente.
 - **Remise par palier** : calcul déclenché manuellement (bouton "Calculer"), pas de tâche planifiée à minuit — aucune infra de cron dans l'appli. Un vrai calcul automatique en fin de mois nécessiterait un scheduler externe (ex: Vercel Cron) appelant `computeDiscount` pour chaque barème.
 - **Rapports** : page existante mais pas d'export CSV dessus (contrairement aux 5 autres pages).
-- Aucun test automatisé (unit/e2e) — toutes les vérifications de cette série de sessions ont été faites manuellement via des scripts PowerShell contre le serveur de dev (voir historique de conversation pour le détail des cas testés).
+- **Tests automatisés** : un socle existe désormais (voir section 8) — `lib/session.ts` (unitaire) + ventes/transferts/remise fournisseur (intégration). Pas de couverture e2e navigateur, pas de tests sur les autres mutations (paiements, comptage physique, etc.).
 - **Requêtes séquentielles non parallélisées** (`lib/db/queries/dashboard.ts`, `treasury.ts`) : plusieurs `await` indépendants enchaînés au lieu d'un `Promise.all` — coûtait peu avec SQLite embarqué, coûte un vrai aller-retour réseau par requête avec Postgres distant. `getTransfersList` utilise aussi 2 sous-requêtes corrélées par ligne au lieu d'un JOIN/GROUP BY. Identifié lors de l'audit du 04/09, pas encore corrigé — à faire si le temps de chargement du tableau de bord/trésorerie devient sensible.
 
 ## 6. Pièges connus (à lire avant de toucher au schéma ou à l'auth)
@@ -104,4 +104,23 @@ Décidé avec l'utilisateur : passage à Supabase (Postgres), pas Turso, pour re
 
 Une fois la bonne URL trouvée : `db:push` (22 tables créées), `db:seed`, `db:seed-admin` exécutés avec succès, puis testé en conditions réelles (`pnpm dev` pointé sur la vraie base) — connexion admin, chargement de toutes les pages, création d'une vente avec vérification du stock/trésorerie, et test bout-en-bout du cycle de remise fournisseur corrigé (5 puis +6 sacs → palier de 10 franchi, remise accordée sur les 11 sacs, compteur remis à 0). Tout fonctionne.
 
-**Pas encore fait à cette date** : le déploiement Vercel.
+**Pas encore fait à cette date** : le déploiement Vercel (l'utilisateur l'a géré lui-même de son côté par la suite).
+
+## 8. Catalogue farine uniquement, vente en tonnes, et socle de tests (15/09/2026)
+
+**Catalogue farine + vente en tonnes** :
+- `products.sackWeightKg` (nullable, `doublePrecision`) — poids d'un sac en kg. `null` = produit vendable uniquement en sacs.
+- `saleItems.unit` (`'sack' | 'tonne'`, défaut `'sack'`) et `saleItems.tonnage` (nullable) — `quantity` reste **toujours** le nombre de sacs, quel que soit le mode de saisie ; `unit`/`tonnage` ne servent qu'à l'affichage/l'audit. Tout le reste (stock, cycle de remise) continue de lire `quantity` sans changement.
+- `createSale` (`lib/db/mutations/sales.ts`) : si `unit === 'tonne'`, calcule `quantity = Math.round((tonnage * 1000) / sackWeightKg)` ; lève une erreur claire si le produit n'a pas de `sackWeightKg` configuré. Le reste de la logique (vérif. stock, transaction) est inchangé.
+- UI (`components/sales-view.tsx`) : toggle Sac/Tonne par ligne d'article, indice "≈ N sacs" en direct quand le mode Tonne est actif ; option Tonne désactivée si le produit n'a pas de poids de sac configuré.
+- Ajout du champ optionnel "Poids du sac (kg)" au formulaire de création de produit (`components/stock-view.tsx`).
+- `lib/db/seed.ts` réécrit avec un catalogue 100% farine (6 SKUs : blé T55, complète, boulangère, pâtissière ; 25kg et 50kg selon le produit) — chacun avec `sackWeightKg` renseigné. Nécessitait aussi d'ajouter la suppression de `supplierDeliveries`/`supplierPayables`/`supplierPayments`/`suppliers`/`discountApplications`/`discountTiers`/`discountScales`/`stockCounts` au début du script (absent jusqu'ici) — sans ça, `db:seed` échouait sur une contrainte FK dès qu'une livraison fournisseur avait été enregistrée en base (ce qui était le cas suite aux tests manuels de la section 7).
+
+**Socle de tests (Vitest)** : `vitest` (v3, pas v5 — better-auth déclare un peer dep `vitest ^2||^3||^4`) + `dotenv` en devDependencies. `vitest.config.ts` (environnement Node, alias `@` résolu manuellement car Vitest ne lit pas `tsconfig.json` nativement), `tests/setup.ts` charge `.env.local`. Script `pnpm test`.
+- `tests/session.test.ts` — unitaire pur, pas de DB (`isAdmin`, `effectiveStoreParam`, `scopedStoreList`).
+- `tests/discounts.test.ts`, `tests/sales.test.ts`, `tests/transfers.test.ts` — intégration, contre la **vraie base Supabase** (pas de base de test séparée disponible sur le plan gratuit). Chaque test crée ses propres fixtures (magasin/produit/client/fournisseur) suffixées par un id de run unique, et les supprime par id dans `afterAll` — jamais de `TRUNCATE`/suppression globale sur une table partagée. `tests/discounts.test.ts` re-teste exactement le scénario de la section 7 (palier franchi → remise sur le total cumulé, compteur remis à 0).
+- 17 tests, tous verts, exécutés contre la vraie base après le `db:push`/`db:seed` de cette session.
+
+**Piège rencontré** : `pnpm db:push`/`db:seed` échouent avec `DATABASE_URL is not set` quand lancés directement depuis PowerShell, car `drizzle.config.ts` lit `process.env.DATABASE_URL` sans jamais charger `.env.local` lui-même (Next.js le fait automatiquement en dev, mais pas les scripts CLI). Contournement utilisé : injecter les variables de `.env.local` dans l'environnement PowerShell avant d'appeler la commande (`Get-Content .env.local | ... SetEnvironmentVariable`). À reproduire à l'identique si `db:push`/`db:seed`/`db:seed-admin` sont relancés manuellement hors de `next dev`.
+
+**Vérifié en conditions réelles** : après `db:push` + `db:seed`, connexion admin via `pnpm dev` pointé sur la vraie base, catalogue confirmé 100% farine via `/api/products`, et une vente en tonnes testée bout-en-bout via l'API réelle (0.5 tonne d'un produit à 25kg/sac → 20 sacs déduits du stock, montant total correct).

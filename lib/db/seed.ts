@@ -1,14 +1,22 @@
 import { db } from './client'
 import {
   clients,
+  discountApplications,
+  discountScales,
+  discountTiers,
   payments,
   products,
   receivables,
   saleItems,
   sales,
+  stockCounts,
   stockLevels,
   stockMovements,
   stores,
+  supplierDeliveries,
+  supplierPayables,
+  supplierPayments,
+  suppliers,
   transferItems,
   transfers,
 } from './schema'
@@ -29,6 +37,14 @@ async function seed() {
   await db.delete(payments)
   await db.delete(saleItems)
   await db.delete(sales)
+  await db.delete(discountApplications)
+  await db.delete(discountTiers)
+  await db.delete(discountScales)
+  await db.delete(supplierPayables)
+  await db.delete(supplierDeliveries)
+  await db.delete(supplierPayments)
+  await db.delete(suppliers)
+  await db.delete(stockCounts)
   await db.delete(stockMovements)
   await db.delete(stockLevels)
   await db.delete(clients)
@@ -47,18 +63,16 @@ async function seed() {
   const productRows = await db
     .insert(products)
     .values([
-      { name: 'Riz parfumé 25kg', sku: 'RIZ-25', category: 'Épicerie', unitPrice: 18500, costPrice: 15000, reorderThreshold: 20 },
-      { name: 'Huile végétale 5L', sku: 'HUI-5', category: 'Épicerie', unitPrice: 7200, costPrice: 5800, reorderThreshold: 25 },
-      { name: 'Savon de ménage', sku: 'SAV-01', category: 'Hygiène', unitPrice: 650, costPrice: 450, reorderThreshold: 50 },
-      { name: 'Farine de blé 10kg', sku: 'FAR-10', category: 'Épicerie', unitPrice: 9200, costPrice: 7400, reorderThreshold: 15 },
-      { name: 'Sucre en poudre 1kg', sku: 'SUC-01', category: 'Épicerie', unitPrice: 900, costPrice: 720, reorderThreshold: 40 },
-      { name: 'Lait en poudre 400g', sku: 'LAI-04', category: 'Épicerie', unitPrice: 2100, costPrice: 1650, reorderThreshold: 30 },
-      { name: 'Boisson gazeuse 1.5L', sku: 'BOI-15', category: 'Boissons', unitPrice: 800, costPrice: 600, reorderThreshold: 60 },
-      { name: 'Papier hygiénique x4', sku: 'PAP-04', category: 'Hygiène', unitPrice: 1400, costPrice: 1050, reorderThreshold: 30 },
+      { name: 'Farine de blé T55 25kg', sku: 'FAR-T55-25', category: 'Farine de blé', unitPrice: 18500, costPrice: 15500, reorderThreshold: 30, sackWeightKg: 25 },
+      { name: 'Farine de blé T55 50kg', sku: 'FAR-T55-50', category: 'Farine de blé', unitPrice: 36000, costPrice: 30500, reorderThreshold: 20, sackWeightKg: 50 },
+      { name: 'Farine complète 25kg', sku: 'FAR-CPL-25', category: 'Farine complète', unitPrice: 19500, costPrice: 16500, reorderThreshold: 25, sackWeightKg: 25 },
+      { name: 'Farine complète 50kg', sku: 'FAR-CPL-50', category: 'Farine complète', unitPrice: 38000, costPrice: 32000, reorderThreshold: 15, sackWeightKg: 50 },
+      { name: 'Farine boulangère 50kg', sku: 'FAR-BLG-50', category: 'Farine boulangère', unitPrice: 37000, costPrice: 31000, reorderThreshold: 20, sackWeightKg: 50 },
+      { name: 'Farine pâtissière 25kg', sku: 'FAR-PAT-25', category: 'Farine pâtissière', unitPrice: 20500, costPrice: 17500, reorderThreshold: 15, sackWeightKg: 25 },
     ])
     .returning()
 
-  const [riz, huile, savon, farine, sucre, lait, boisson, papier] = productRows
+  const [fT5525, fT5550, fCpl25, fCpl50, fBlg50, fPat25] = productRows
 
   const storeList = [akwa, bonapriso, bastos]
   const stockRows: { productId: number; storeId: number; quantity: number }[] = []
@@ -68,9 +82,9 @@ async function seed() {
       stockRows.push({ productId: product.id, storeId: store.id, quantity: base })
     }
   }
-  stockRows.find((row) => row.productId === savon.id && row.storeId === akwa.id)!.quantity = 6
-  stockRows.find((row) => row.productId === papier.id && row.storeId === bonapriso.id)!.quantity = 4
-  stockRows.find((row) => row.productId === sucre.id && row.storeId === bastos.id)!.quantity = 8
+  stockRows.find((row) => row.productId === fCpl50.id && row.storeId === akwa.id)!.quantity = 6
+  stockRows.find((row) => row.productId === fPat25.id && row.storeId === bonapriso.id)!.quantity = 4
+  stockRows.find((row) => row.productId === fBlg50.id && row.storeId === bastos.id)!.quantity = 8
   await db.insert(stockLevels).values(stockRows)
 
   const clientRows = await db
@@ -99,7 +113,7 @@ async function seed() {
     { store: bonapriso, ref: 'BG-1037', daysAgo: 7, hours: 0, minutes: 0, status: 'partial' as const, client: clientRows[4] },
   ]
 
-  const catalog = [riz, huile, savon, farine, sucre, lait, boisson, papier]
+  const catalog = [fT5525, fT5550, fCpl25, fCpl50, fBlg50, fPat25]
 
   for (const plan of salesPlan) {
     const itemCount = Math.floor(Math.random() * 3) + 1
@@ -177,7 +191,7 @@ async function seed() {
 
   await db.insert(stockMovements).values({
     type: 'reception',
-    productId: riz.id,
+    productId: fT5525.id,
     storeId: bonapriso.id,
     quantity: 84,
     reference: 'RCP-3312',
@@ -196,8 +210,8 @@ async function seed() {
     .returning()
 
   await db.insert(transferItems).values([
-    { transferId: transfer.id, productId: huile.id, quantity: 20 },
-    { transferId: transfer.id, productId: boisson.id, quantity: 40 },
+    { transferId: transfer.id, productId: fT5550.id, quantity: 20 },
+    { transferId: transfer.id, productId: fCpl25.id, quantity: 40 },
   ])
 
   console.log('Database seeded successfully.')

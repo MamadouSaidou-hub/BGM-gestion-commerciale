@@ -12,6 +12,7 @@ export async function createProduct(input: {
   reorderThreshold: number
   storeId: number
   initialQuantity: number
+  sackWeightKg?: number | null
 }) {
   const [product] = await db
     .insert(products)
@@ -22,6 +23,7 @@ export async function createProduct(input: {
       unitPrice: input.unitPrice,
       costPrice: input.costPrice,
       reorderThreshold: input.reorderThreshold,
+      sackWeightKg: input.sackWeightKg ?? null,
     })
     .returning()
 

@@ -26,6 +26,9 @@ export const products = pgTable('products', {
   unitPrice: doublePrecision('unit_price').notNull(),
   costPrice: doublePrecision('cost_price').notNull(),
   reorderThreshold: integer('reorder_threshold').notNull().default(10),
+  // Weight of one sack, in kg — lets a sale be entered in tonnes and converted to a sack count.
+  // Null means this product can only be sold by sack count directly.
+  sackWeightKg: doublePrecision('sack_weight_kg'),
   ...timestamps,
 })
 
@@ -97,6 +100,8 @@ export const sales = pgTable('sales', {
   ...timestamps,
 })
 
+export const saleItemUnit = ['sack', 'tonne'] as const
+
 export const saleItems = pgTable('sale_items', {
   id: serial('id').primaryKey(),
   saleId: integer('sale_id')
@@ -105,8 +110,12 @@ export const saleItems = pgTable('sale_items', {
   productId: integer('product_id')
     .notNull()
     .references(() => products.id, { onDelete: 'restrict' }),
+  // Always the sack count, however the sale was entered — everything downstream (stock, discount
+  // cycles) reads this. `unit`/`tonnage` below are purely what the seller typed, for display/audit.
   quantity: integer('quantity').notNull(),
   unitPrice: doublePrecision('unit_price').notNull(),
+  unit: text('unit', { enum: saleItemUnit }).notNull().default('sack'),
+  tonnage: doublePrecision('tonnage'),
 })
 
 export const paymentMethod = ['cash', 'mobile_money', 'bank_transfer', 'check'] as const

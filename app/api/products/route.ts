@@ -32,6 +32,7 @@ export async function POST(request: NextRequest) {
       reorderThreshold: Number(body.reorderThreshold ?? 10),
       storeId,
       initialQuantity: Number(body.initialQuantity ?? 0),
+      sackWeightKg: body.sackWeightKg !== undefined && body.sackWeightKg !== null && body.sackWeightKg !== '' ? Number(body.sackWeightKg) : null,
     })
     return NextResponse.json({ product }, { status: 201 })
   } catch (error) {

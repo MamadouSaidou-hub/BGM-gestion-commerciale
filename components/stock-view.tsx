@@ -49,6 +49,7 @@ function NewProductForm({ storeOptions, onCreated }: { storeOptions: StoreOption
   const [reorderThreshold, setReorderThreshold] = useState('10')
   const [storeId, setStoreId] = useState('')
   const [initialQuantity, setInitialQuantity] = useState('0')
+  const [sackWeightKg, setSackWeightKg] = useState('')
   const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
 
@@ -64,7 +65,7 @@ function NewProductForm({ storeOptions, onCreated }: { storeOptions: StoreOption
       const res = await fetch('/api/products', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, sku, category, unitPrice, costPrice, reorderThreshold, storeId, initialQuantity }),
+        body: JSON.stringify({ name, sku, category, unitPrice, costPrice, reorderThreshold, storeId, initialQuantity, sackWeightKg: sackWeightKg || null }),
       })
       const json = await res.json()
       if (!res.ok) {
@@ -92,6 +93,10 @@ function NewProductForm({ storeOptions, onCreated }: { storeOptions: StoreOption
       <div className="form-row">
         <div className="form-field"><label>Seuil d’alerte</label><input required type="number" min="0" value={reorderThreshold} onChange={(event) => setReorderThreshold(event.target.value)} /></div>
         <div className="form-field"><label>Quantité initiale</label><input required type="number" min="0" value={initialQuantity} onChange={(event) => setInitialQuantity(event.target.value)} /></div>
+      </div>
+      <div className="form-field">
+        <label>Poids du sac (kg, optionnel)</label>
+        <input type="number" min="0" step="0.1" placeholder="Ex : 25" value={sackWeightKg} onChange={(event) => setSackWeightKg(event.target.value)} />
       </div>
       <div className="form-field">
         <label>Magasin de départ</label>
