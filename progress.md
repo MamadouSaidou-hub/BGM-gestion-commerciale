@@ -177,3 +177,14 @@ Vérifié : `tsc` propre, `db:push` appliqué avec succès, 37 index confirmés 
 Les deux s'exécutent entièrement côté navigateur (aucun appel serveur, aucune dépendance à un service externe) — fonctionne même sur une connexion lente une fois la page chargée.
 
 Vérifié : `tsc` propre, API testée sur les 3 périodes (aujourd'hui/7j/mois) avec des données réelles, page chargée sans erreur, les 17 tests Vitest toujours verts. La logique de génération PDF/Excel elle-même a été testée directement en Node (script jetable, supprimé après usage) avec des données réalistes — `jsPDF`/`autoTable` et `XLSX.write` s'exécutent sans erreur et produisent des fichiers valides (PDF 2 pages, classeur Excel à plusieurs onglets). Reste non vérifié : le rendu visuel réel dans le navigateur (pas d'outil de capture d'écran disponible) et le déclenchement du téléchargement par clic — à confirmer par l'utilisateur.
+
+## 13. Correction de la faille de concurrence sur le barème de remise (18/09/2026)
+
+**Le bug** : `getOrCreateScale()` (`lib/db/mutations/discounts.ts`) faisait un `SELECT` puis, si rien trouvé, un `INSERT` — sans transaction ni verrou. Deux appels quasi simultanés (ex. deux livraisons fournisseur enregistrées à quelques millisecondes d'écart, ou une vente + un clic manuel sur "Vérifier le palier") pouvaient tous les deux voir "aucun barème" et tous les deux insérer — créant deux lignes `discount_scales` pour le même fournisseur/client, chacune avec ses propres paliers et son propre suivi de cycle. Même faille, même forme, sur `discountApplications` dans `computeDiscount()` (calcul mensuel client).
+
+**Corrigé** :
+- `lib/db/schema.ts` : les index sur `discount_scales(party_type, party_id)` et `discount_applications(scale_id, period)` sont passés de `index()` à `uniqueIndex()`. Vérifié au préalable qu'aucun doublon n'existait déjà en base (table vide) avant d'appliquer — une contrainte unique échoue à la création s'il y a déjà des doublons.
+- `getOrCreateScale()` : `INSERT ... ON CONFLICT DO NOTHING RETURNING *`, puis un `SELECT` de secours si l'insert a été ignoré (l'autre appel a gagné la course). Un seul insert peut réussir ; le perdant relit la ligne du gagnant au lieu d'en créer une deuxième.
+- `computeDiscount()` : remplacé le `SELECT` puis `UPDATE`/`INSERT` par un `INSERT ... ON CONFLICT (scaleId, period) DO UPDATE` (upsert atomique).
+
+**Vérifié concrètement, pas juste en théorie** : deux nouveaux tests dans `tests/discounts.test.ts` (section "concurrency safety") lancent **10 appels réellement simultanés** (`Promise.all`) sur un fournisseur/client tout neuf sans barème existant, puis vérifient qu'il n'existe bien qu'**une seule** ligne `discount_scales`/`discount_applications` après coup. Les deux passent. 19 tests au total désormais, tous verts. `db:push` appliqué avec succès sur la vraie base, contraintes uniques confirmées via `pg_indexes`.

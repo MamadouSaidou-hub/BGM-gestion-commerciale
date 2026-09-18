@@ -1,8 +1,8 @@
 import { and, eq } from 'drizzle-orm'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { db } from '@/lib/db/client'
-import { discountApplications, discountScales, discountTiers, products, stores, supplierDeliveries, suppliers } from '@/lib/db/schema'
-import { checkAndGrantSupplierCycle, getSupplierCycleProgress, setDiscountTiers } from '@/lib/db/mutations/discounts'
+import { clients, discountApplications, discountScales, discountTiers, products, sales, stores, supplierDeliveries, suppliers } from '@/lib/db/schema'
+import { checkAndGrantSupplierCycle, computeDiscount, getSupplierCycleProgress, setDiscountTiers } from '@/lib/db/mutations/discounts'
 
 // Integration test — runs against the real Supabase Postgres DB (no separate test DB available on the
 // free tier). Every fixture is suffixed with a unique run id and cleaned up in afterAll by id, so it
@@ -91,5 +91,56 @@ describe('supplier discount cycle', () => {
     expect(grant?.sackCount).toBe(2000)
     expect(grant?.discountPerSack).toBe(5000)
     expect(grant?.totalDiscount).toBe(2000 * 5000)
+  })
+})
+
+describe('concurrency safety', () => {
+  it('creates exactly one discount_scales row when two calls race to create it for the same party', async () => {
+    const [supplier] = await db.insert(suppliers).values({ name: `Fournisseur concurrence ${runId}` }).returning()
+    try {
+      // Every call here hits a brand-new supplier with no existing scale — this is exactly the race
+      // getOrCreateScale() guards against with onConflictDoNothing + the unique index.
+      await Promise.all(
+        Array.from({ length: 10 }, () => setDiscountTiers('supplier', supplier.id, [{ thresholdSacks: 500, discountPerSack: 1000 }])),
+      )
+
+      const scaleRows = await db
+        .select()
+        .from(discountScales)
+        .where(and(eq(discountScales.partyType, 'supplier'), eq(discountScales.partyId, supplier.id)))
+      expect(scaleRows).toHaveLength(1)
+    } finally {
+      const [scale] = await db
+        .select()
+        .from(discountScales)
+        .where(and(eq(discountScales.partyType, 'supplier'), eq(discountScales.partyId, supplier.id)))
+      if (scale) {
+        await db.delete(discountTiers).where(eq(discountTiers.scaleId, scale.id))
+        await db.delete(discountScales).where(eq(discountScales.id, scale.id))
+      }
+      await db.delete(suppliers).where(eq(suppliers.id, supplier.id))
+    }
+  })
+
+  it('creates exactly one discount_applications row when two computeDiscount() calls race for the same client/period', async () => {
+    const [client] = await db.insert(clients).values({ name: `Client concurrence ${runId}` }).returning()
+    try {
+      await Promise.all(Array.from({ length: 10 }, () => computeDiscount('client', client.id)))
+
+      const [scale] = await db
+        .select()
+        .from(discountScales)
+        .where(and(eq(discountScales.partyType, 'client'), eq(discountScales.partyId, client.id)))
+      expect(scale).toBeTruthy()
+
+      const applicationRows = await db.select().from(discountApplications).where(eq(discountApplications.scaleId, scale.id))
+      expect(applicationRows).toHaveLength(1)
+
+      await db.delete(discountApplications).where(eq(discountApplications.scaleId, scale.id))
+      await db.delete(discountScales).where(eq(discountScales.id, scale.id))
+    } finally {
+      await db.delete(sales).where(eq(sales.clientId, client.id))
+      await db.delete(clients).where(eq(clients.id, client.id))
+    }
   })
 })

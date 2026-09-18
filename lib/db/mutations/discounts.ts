@@ -19,8 +19,16 @@ function periodRange(period: string) {
 async function getOrCreateScale(partyType: PartyType, partyId: number) {
   const [existing] = await db.select().from(discountScales).where(and(eq(discountScales.partyType, partyType), eq(discountScales.partyId, partyId)))
   if (existing) return existing
-  const [created] = await db.insert(discountScales).values({ partyType, partyId }).returning()
-  return created
+
+  // Two concurrent calls can both reach here having seen no existing row (e.g. two supplier
+  // deliveries recorded moments apart). `onConflictDoNothing` + the unique index on
+  // (partyType, partyId) means only one insert actually lands; the loser falls back to reading the
+  // winner's row instead of creating a duplicate scale.
+  const [created] = await db.insert(discountScales).values({ partyType, partyId }).onConflictDoNothing().returning()
+  if (created) return created
+
+  const [afterConflict] = await db.select().from(discountScales).where(and(eq(discountScales.partyType, partyType), eq(discountScales.partyId, partyId)))
+  return afterConflict
 }
 
 async function sacksMovedInPeriod(partyType: PartyType, partyId: number, period: string) {
@@ -54,25 +62,16 @@ export async function computeDiscount(partyType: PartyType, partyId: number, per
 
   const nextTier = [...tiers].sort((a, b) => a.thresholdSacks - b.thresholdSacks).find((tier) => tier.thresholdSacks > sackCount) ?? null
 
-  const [existingApplication] = await db
-    .select()
-    .from(discountApplications)
-    .where(and(eq(discountApplications.scaleId, scale.id), eq(discountApplications.period, period)))
-
-  if (existingApplication) {
-    await db
-      .update(discountApplications)
-      .set({ tierReached: tierReached?.thresholdSacks ?? null, sackCount, totalDiscount })
-      .where(eq(discountApplications.id, existingApplication.id))
-  } else {
-    await db.insert(discountApplications).values({
-      scaleId: scale.id,
-      period,
-      tierReached: tierReached?.thresholdSacks ?? null,
-      sackCount,
-      totalDiscount,
+  // Upsert instead of select-then-branch: two concurrent calls for the same client/period would
+  // otherwise both see "no application yet" and both insert, creating a duplicate row. The unique
+  // index on (scaleId, period) plus onConflictDoUpdate makes this atomic instead.
+  await db
+    .insert(discountApplications)
+    .values({ scaleId: scale.id, period, tierReached: tierReached?.thresholdSacks ?? null, sackCount, totalDiscount })
+    .onConflictDoUpdate({
+      target: [discountApplications.scaleId, discountApplications.period],
+      set: { tierReached: tierReached?.thresholdSacks ?? null, sackCount, totalDiscount },
     })
-  }
 
   return {
     scaleId: scale.id,

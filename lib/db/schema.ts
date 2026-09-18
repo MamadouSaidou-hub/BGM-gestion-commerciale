@@ -1,5 +1,5 @@
 import { relations } from 'drizzle-orm'
-import { doublePrecision, index, integer, pgTable, serial, text } from 'drizzle-orm/pg-core'
+import { doublePrecision, index, integer, pgTable, serial, text, uniqueIndex } from 'drizzle-orm/pg-core'
 
 const timestamps = {
   // JS-side default (not a DB-level `now()`/`current_timestamp`) so every timestamp in the app is
@@ -322,8 +322,11 @@ export const discountScales = pgTable(
     ...timestamps,
   },
   // Looked up by (partyType, partyId) on essentially every sale and every supplier delivery —
-  // getOrCreateScale() in lib/db/mutations/discounts.ts.
-  (table) => [index('discount_scales_party_idx').on(table.partyType, table.partyId)],
+  // getOrCreateScale() in lib/db/mutations/discounts.ts. Unique (not just indexed): two concurrent
+  // calls both finding "no scale yet" and both inserting would otherwise create two rows for the same
+  // party, fragmenting tier config and cycle tracking. The unique constraint plus an
+  // onConflictDoNothing + re-select in getOrCreateScale makes that race safe.
+  (table) => [uniqueIndex('discount_scales_party_idx').on(table.partyType, table.partyId)],
 )
 
 export const discountTiers = pgTable(
@@ -352,7 +355,14 @@ export const discountApplications = pgTable(
     totalDiscount: doublePrecision('total_discount').notNull(),
     ...timestamps,
   },
-  (table) => [index('discount_applications_scale_id_idx').on(table.scaleId)],
+  (table) => [
+    index('discount_applications_scale_id_idx').on(table.scaleId),
+    // Same race as discountScales above: two concurrent computeDiscount() calls for the same
+    // client/period could otherwise both see "no application yet" and both insert. Unique so the
+    // upsert in computeDiscount is race-safe. Client scales have one row per calendar period;
+    // supplier cycle grants always use a fresh timestamp as `period`, so this never conflicts there.
+    uniqueIndex('discount_applications_scale_period_idx').on(table.scaleId, table.period),
+  ],
 )
 
 export const storesRelations = relations(stores, ({ many }) => ({
