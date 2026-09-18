@@ -161,3 +161,19 @@ Vérifié : `tsc` propre, les 17 tests Vitest toujours verts, et un test manuel 
 - Toujours aucun cache HTTP/SWR côté client — chaque changement de page recharge tout depuis zéro. Pas critique à l'échelle actuelle, mais à revisiter si le nombre de pages vues par utilisateur augmente beaucoup.
 
 Vérifié : `tsc` propre, `db:push` appliqué avec succès, 37 index confirmés en base, les 17 tests Vitest toujours verts.
+
+## 12. Page Rapports enrichie + export PDF/Excel (18/09/2026)
+
+**Backend** (`lib/db/queries/reports.ts`, réécrit) : en plus du CA par magasin et du top produits déjà existants, ajoute — marge brute et % de marge, nombre de ventes et panier moyen, une courbe d'évolution des ventes sur la période (buckets horaires pour "Aujourd'hui", journaliers sinon), le top clients par CA, la répartition par statut de paiement (payée/partielle/crédit), et un résumé fournisseurs (sacs reçus, nb livraisons, montant payé). Toutes les requêtes indépendantes tournent en `Promise.all` (même principe que la section 9). Les valeurs numériques brutes sont renvoyées en plus des chaînes déjà formatées, pour que les graphiques et les exports Excel disposent de vrais nombres (pas de re-parsing de `"1 234 FCFA"`).
+
+**Frontend** (`components/reports-view.tsx`, réécrit) : 4 cartes indicateurs, un graphique en barres pour l'évolution des ventes (réutilise le style déjà en place sur le tableau de bord), un classement en barres horizontales pour magasins/produits/clients (nouveau composant `RankBar`, nouvelles classes CSS `.rank-bar-*`), et une répartition des statuts de paiement avec code couleur cohérent avec le reste de l'app (vert=payée, orange=partielle, bleu=crédit — même mapping que `sales-view.tsx`). Couleurs et code couleur suivent la méthode du skill `dataviz` (une teinte par série pour une grille de magnitude, teintes catégorielles fixes pour les statuts).
+
+**Piège corrigé au passage** : `.bar-chart` (graphique en barres, réutilisé du tableau de bord) n'avait ni `min-width: 0` ni `overflow-x: auto` — avec jusqu'à ~30 barres journalières sur la vue "Ce mois-ci", ça aurait pu reproduire le bug de débordement horizontal déjà corrigé en section précédente. Corrigé en ajoutant les deux, avec `flex-shrink: 0` sur `.bar-group` pour que les barres scrollent au lieu de se tasser. Découvert au passage : `dashboard-view.tsx` référençait déjà une classe `.blue-dot` qui n'existait nulle part dans `globals.css` (4ᵉ magasin sans couleur) — ajoutée.
+
+**Export** (`lib/export-report.ts`, nouveau) : deux fonctions client-side, déclenchées par deux boutons dans la barre d'outils de la page.
+- `exportReportPdf` — via `jspdf` + `jspdf-autotable` : titre, indicateurs clés, tableaux (magasins, statuts de paiement, top produits, top clients, fournisseurs), pagination automatique, numéros de page.
+- `exportReportExcel` — via `xlsx` (SheetJS) : classeur à 6 onglets (Résumé, Évolution ventes, Par magasin, Statuts paiement, Top produits, Top clients), valeurs numériques brutes (pas de texte formaté) pour que les montants restent exploitables (tri, formules) dans Excel.
+
+Les deux s'exécutent entièrement côté navigateur (aucun appel serveur, aucune dépendance à un service externe) — fonctionne même sur une connexion lente une fois la page chargée.
+
+Vérifié : `tsc` propre, API testée sur les 3 périodes (aujourd'hui/7j/mois) avec des données réelles, page chargée sans erreur, les 17 tests Vitest toujours verts. La logique de génération PDF/Excel elle-même a été testée directement en Node (script jetable, supprimé après usage) avec des données réalistes — `jsPDF`/`autoTable` et `XLSX.write` s'exécutent sans erreur et produisent des fichiers valides (PDF 2 pages, classeur Excel à plusieurs onglets). Reste non vérifié : le rendu visuel réel dans le navigateur (pas d'outil de capture d'écran disponible) et le déclenchement du téléchargement par clic — à confirmer par l'utilisateur.
