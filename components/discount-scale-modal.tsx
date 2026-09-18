@@ -3,6 +3,8 @@
 import { useEffect, useState } from 'react'
 import { Plus, Trash2 } from 'lucide-react'
 import { Modal } from '@/components/modal'
+import { LoadError } from '@/components/load-error'
+import { fetchJson } from '@/lib/fetch-json'
 
 type Tier = { id?: number; thresholdSacks: string; discountPerSack: string }
 type ScaleData = {
@@ -40,12 +42,13 @@ export function DiscountScaleModal({
 
   function load() {
     setLoading(true)
-    fetch(`/api/remises/${partyType}/${partyId}`)
-      .then((res) => res.json())
-      .then((json: ScaleData) => {
+    setError('')
+    fetchJson<ScaleData>(`/api/remises/${partyType}/${partyId}`)
+      .then((json) => {
         setData(json)
         setTiers(json.tiers.map((tier) => ({ id: tier.id, thresholdSacks: String(tier.thresholdSacks), discountPerSack: String(tier.discountPerSack) })))
       })
+      .catch((err) => setError(err instanceof Error ? err.message : 'Erreur inconnue.'))
       .finally(() => setLoading(false))
   }
 
@@ -84,6 +87,8 @@ export function DiscountScaleModal({
         return
       }
       load()
+    } catch {
+      setError('Connexion instable — impossible de contacter le serveur. Réessayez.')
     } finally {
       setSaving(false)
     }
@@ -92,13 +97,20 @@ export function DiscountScaleModal({
   async function handleCalculate() {
     setCalculating(true)
     setCalculateMessage('')
+    setError('')
     try {
       const res = await fetch(`/api/remises/${partyType}/${partyId}/calculer`, { method: 'POST' })
       const json = await res.json()
+      if (!res.ok) {
+        setError(json.error ?? 'Une erreur est survenue.')
+        return
+      }
       if (partyType === 'supplier' && !json.result) {
         setCalculateMessage('Palier pas encore atteint — rien à accorder pour l’instant.')
       }
       load()
+    } catch {
+      setError('Connexion instable — impossible de contacter le serveur. Réessayez.')
     } finally {
       setCalculating(false)
     }
@@ -113,6 +125,7 @@ export function DiscountScaleModal({
       wide
     >
       {loading && <p className="heading-subtitle">Chargement...</p>}
+      {!loading && !data && error && <LoadError message={error} onRetry={load} />}
       {!loading && data && (
         <>
           {error && <p className="form-error">{error}</p>}

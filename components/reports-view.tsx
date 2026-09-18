@@ -3,6 +3,8 @@
 import { useEffect, useState } from 'react'
 import { ChevronDown, TrendingUp } from 'lucide-react'
 import { AppShell } from '@/components/app-shell'
+import { LoadError } from '@/components/load-error'
+import { fetchJson } from '@/lib/fetch-json'
 
 const periods = ['Aujourd’hui', '7 derniers jours', 'Ce mois-ci']
 
@@ -16,14 +18,19 @@ export function ReportsView() {
   const [period, setPeriod] = useState(periods[2])
   const [data, setData] = useState<ReportsData | null>(null)
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+  const [refreshKey, setRefreshKey] = useState(0)
 
   useEffect(() => {
     let cancelled = false
     setLoading(true)
-    fetch(`/api/rapports?period=${encodeURIComponent(period)}`)
-      .then((res) => res.json())
-      .then((json: ReportsData) => {
+    setError('')
+    fetchJson<ReportsData>(`/api/rapports?period=${encodeURIComponent(period)}`)
+      .then((json) => {
         if (!cancelled) setData(json)
+      })
+      .catch((err) => {
+        if (!cancelled) setError(err instanceof Error ? err.message : 'Erreur inconnue.')
       })
       .finally(() => {
         if (!cancelled) setLoading(false)
@@ -31,7 +38,7 @@ export function ReportsView() {
     return () => {
       cancelled = true
     }
-  }, [period])
+  }, [period, refreshKey])
 
   return (
     <AppShell breadcrumb="Pilotage" section="Rapports">
@@ -41,6 +48,8 @@ export function ReportsView() {
           <label className="select-wrap"><span className="sr-only">Période</span><select value={period} onChange={(event) => setPeriod(event.target.value)}>{periods.map((item) => <option key={item}>{item}</option>)}</select><ChevronDown /></label>
         </div>
       </section>
+
+      {error && <LoadError message={error} onRetry={() => setRefreshKey((key) => key + 1)} />}
 
       <section className="dashboard-grid">
         <article className="panel">

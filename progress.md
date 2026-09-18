@@ -133,3 +133,17 @@ Une fois la bonne URL trouvée : `db:push` (22 tables créées), `db:seed`, `db:
 `lib/db/queries/dashboard.ts` et `treasury.ts` enchaînaient une dizaine de `await` indépendants les uns après les autres — chacun un aller-retour réseau complet vers Supabase. Remplacé par un seul `Promise.all` par fichier regroupant toutes les requêtes qui ne dépendent pas les unes des autres (y compris la boucle des 7 jours de `salesTrend`, auparavant 7 requêtes séquentielles, désormais lancées en parallèle). Seule exception laissée séquentielle : la requête du nom du magasin de destination d'un transfert en cours, qui dépend du résultat de la requête précédente (`pendingTransfer.toStoreId`) — un seul cas, coût négligeable.
 
 Vérifié : `tsc` propre, les 17 tests Vitest toujours verts, et un test manuel via `pnpm dev` confirmant que `/api/dashboard` et `/api/tresorerie` renvoient des données identiques (mêmes montants, même tendance sur 7 jours) après le changement.
+
+## 10. Résilience réseau — connexion faible/instable (18/09/2026)
+
+**Contexte** : l'utilisateur signale une connexion internet peu fiable en Guinée. Audit du code : aucun des ~20 appels `fetch()` de chargement de liste n'avait de gestion d'erreur réseau — si la connexion lâchait en cours de requête, la page restait bloquée en "chargement..." indéfiniment (aucun `.catch`, promesse rejetée jamais gérée). Les formulaires de création/édition (POST/PATCH) avaient un `try/finally` qui réactivait bien le bouton, mais sans `catch` : en cas de coupure, aucun message n'était affiché à l'utilisateur.
+
+**Corrigé** :
+- `lib/fetch-json.ts` — nouveau helper `fetchJson<T>(url, options, { retries, timeoutMs })` : timeout (15s par défaut, via `AbortController`), **un seul retry automatique** en cas d'échec réseau (backoff court), et lève toujours une erreur avec un message français clair (distinguant panne réseau vs erreur API). Le retry automatique n'est utilisé que pour les requêtes `GET` (idempotentes) — jamais pour les `POST`/`PATCH`/`DELETE`, où retenter automatiquement pourrait dupliquer une action déjà passée côté serveur (ex : créer une vente deux fois) si seule la réponse s'est perdue.
+- `components/load-error.tsx` — petit composant réutilisable : message d'erreur + bouton "Réessayer".
+- Appliqué à **toutes** les pages avec chargement de données (Tableau de bord, Ventes, Stock, Clients, Fournisseurs, Transferts, Trésorerie, Rapports, Magasins, Utilisateurs, + la modale Barème de remise) : le chargement principal utilise `fetchJson` avec état d'erreur affiché + retry ; les données secondaires (listes déroulantes magasins/produits/clients pour les formulaires) utilisent `fetchJson` avec échec silencieux (`catch(() => {})`) pour ne pas bloquer toute la page si une donnée non critique échoue.
+- Tous les formulaires de soumission (`POST`/`PATCH`/`DELETE`) ont désormais un `catch` explicite affichant "Connexion instable — réessayez" au lieu d'échouer silencieusement.
+
+**Non traité** (hors périmètre de ce changement, à signaler si demandé) : pas de vrai mode hors-ligne (pas de service worker, pas de queue de synchronisation) — l'app a toujours besoin d'une connexion pour fonctionner, elle est juste beaucoup plus tolérante aux coupures/lenteurs ponctuelles maintenant, avec un retour visuel clair au lieu d'un écran figé.
+
+Vérifié : `tsc` propre, les 17 tests Vitest toujours verts, et un test manuel via `pnpm dev` confirmant que toutes les pages se chargent normalement et que les données API sont inchangées après le refactor.

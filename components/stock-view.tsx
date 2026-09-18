@@ -4,7 +4,9 @@ import { useEffect, useMemo, useState } from 'react'
 import { AlertTriangle, ChevronDown, ClipboardCheck, Layers, Package, PackagePlus, Plus, Search, Wallet } from 'lucide-react'
 import { AppShell } from '@/components/app-shell'
 import { downloadCsv } from '@/lib/download-csv'
+import { fetchJson } from '@/lib/fetch-json'
 import { Modal } from '@/components/modal'
+import { LoadError } from '@/components/load-error'
 
 type StockItem = {
   name: string
@@ -73,6 +75,8 @@ function NewProductForm({ storeOptions, onCreated }: { storeOptions: StoreOption
         return
       }
       onCreated()
+    } catch {
+      setError('Connexion instable — impossible de contacter le serveur. Réessayez.')
     } finally {
       setSubmitting(false)
     }
@@ -140,6 +144,8 @@ function StockReceptionForm({ storeOptions, productOptions, onCreated }: { store
         return
       }
       onCreated()
+    } catch {
+      setError('Connexion instable — impossible de contacter le serveur. Réessayez.')
     } finally {
       setSubmitting(false)
     }
@@ -213,6 +219,8 @@ function StockCountForm({
         return
       }
       onCreated()
+    } catch {
+      setError('Connexion instable — impossible de contacter le serveur. Réessayez.')
     } finally {
       setSubmitting(false)
     }
@@ -245,6 +253,7 @@ export function StockView() {
   const [search, setSearch] = useState('')
   const [data, setData] = useState<StockData | null>(null)
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
   const [storeOptions, setStoreOptions] = useState<StoreOption[]>([])
   const [productOptions, setProductOptions] = useState<ProductOption[]>([])
   const [productModalOpen, setProductModalOpen] = useState(false)
@@ -256,11 +265,14 @@ export function StockView() {
   useEffect(() => {
     let cancelled = false
     setLoading(true)
+    setError('')
     const params = new URLSearchParams({ store })
-    fetch(`/api/stock?${params.toString()}`)
-      .then((res) => res.json())
-      .then((json: StockData) => {
+    fetchJson<StockData>(`/api/stock?${params.toString()}`)
+      .then((json) => {
         if (!cancelled) setData(json)
+      })
+      .catch((err) => {
+        if (!cancelled) setError(err instanceof Error ? err.message : 'Erreur inconnue.')
       })
       .finally(() => {
         if (!cancelled) setLoading(false)
@@ -271,19 +283,15 @@ export function StockView() {
   }, [store, refreshKey])
 
   useEffect(() => {
-    fetch('/api/magasins')
-      .then((res) => res.json())
-      .then((json: { stores: StoreOption[] }) => setStoreOptions(json.stores))
-    fetch('/api/products')
-      .then((res) => res.json())
-      .then((json: { products: ProductOption[] }) => setProductOptions(json.products))
+    fetchJson<{ stores: StoreOption[] }>('/api/magasins').then((json) => setStoreOptions(json.stores)).catch(() => {})
+    fetchJson<{ products: ProductOption[] }>('/api/products').then((json) => setProductOptions(json.products)).catch(() => {})
   }, [refreshKey])
 
   useEffect(() => {
     const params = new URLSearchParams({ store })
-    fetch(`/api/stock/count?${params.toString()}`)
-      .then((res) => res.json())
-      .then((json: { counts: StockCountRow[] }) => setCounts(json.counts ?? []))
+    fetchJson<{ counts: StockCountRow[] }>(`/api/stock/count?${params.toString()}`)
+      .then((json) => setCounts(json.counts ?? []))
+      .catch(() => {})
   }, [store, refreshKey])
 
   const stores = data?.stores ?? ['Tous les magasins']
@@ -309,6 +317,8 @@ export function StockView() {
           <label className="select-wrap"><span className="sr-only">Magasin</span><select value={store} onChange={(event) => setStore(event.target.value)}>{stores.map((item) => <option key={item}>{item}</option>)}</select><ChevronDown /></label>
         </div>
       </section>
+
+      {error && <LoadError message={error} onRetry={() => setRefreshKey((key) => key + 1)} />}
 
       <section className="metrics-grid" aria-label="Indicateurs stock">
         <MetricCard label="Articles référencés" value={data ? `${data.summary.totalArticles}` : '—'} icon={Package} tone="navy" />

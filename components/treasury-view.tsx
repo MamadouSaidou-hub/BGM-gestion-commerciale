@@ -4,6 +4,8 @@ import { useEffect, useState } from 'react'
 import { ChevronDown, CreditCard, PiggyBank, Plus, Truck, Wallet, WalletCards } from 'lucide-react'
 import { AppShell } from '@/components/app-shell'
 import { Modal } from '@/components/modal'
+import { LoadError } from '@/components/load-error'
+import { fetchJson } from '@/lib/fetch-json'
 
 const periods = ['Aujourd’hui', '7 derniers jours', 'Ce mois-ci']
 
@@ -66,6 +68,8 @@ function NewPaymentForm({ storeOptions, clientOptions, onCreated }: { storeOptio
         return
       }
       onCreated()
+    } catch {
+      setError('Connexion instable — impossible de contacter le serveur. Réessayez.')
     } finally {
       setSubmitting(false)
     }
@@ -108,6 +112,7 @@ export function TreasuryView() {
   const [store, setStore] = useState('Tous les magasins')
   const [data, setData] = useState<TreasuryData | null>(null)
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
   const [storeOptions, setStoreOptions] = useState<StoreOption[]>([])
   const [clientOptions, setClientOptions] = useState<ClientOption[]>([])
   const [modalOpen, setModalOpen] = useState(false)
@@ -116,11 +121,14 @@ export function TreasuryView() {
   useEffect(() => {
     let cancelled = false
     setLoading(true)
+    setError('')
     const params = new URLSearchParams({ period, store })
-    fetch(`/api/tresorerie?${params.toString()}`)
-      .then((res) => res.json())
-      .then((json: TreasuryData) => {
+    fetchJson<TreasuryData>(`/api/tresorerie?${params.toString()}`)
+      .then((json) => {
         if (!cancelled) setData(json)
+      })
+      .catch((err) => {
+        if (!cancelled) setError(err instanceof Error ? err.message : 'Erreur inconnue.')
       })
       .finally(() => {
         if (!cancelled) setLoading(false)
@@ -131,8 +139,8 @@ export function TreasuryView() {
   }, [period, store, refreshKey])
 
   useEffect(() => {
-    fetch('/api/magasins').then((res) => res.json()).then((json: { stores: StoreOption[] }) => setStoreOptions(json.stores))
-    fetch('/api/clients/options').then((res) => res.json()).then((json: { clients: ClientOption[] }) => setClientOptions(json.clients))
+    fetchJson<{ stores: StoreOption[] }>('/api/magasins').then((json) => setStoreOptions(json.stores)).catch(() => {})
+    fetchJson<{ clients: ClientOption[] }>('/api/clients/options').then((json) => setClientOptions(json.clients)).catch(() => {})
   }, [refreshKey])
 
   const stores = data?.stores ?? ['Tous les magasins']
@@ -146,6 +154,8 @@ export function TreasuryView() {
           <label className="select-wrap"><span className="sr-only">Magasin</span><select value={store} onChange={(event) => setStore(event.target.value)}>{stores.map((item) => <option key={item}>{item}</option>)}</select><ChevronDown /></label>
         </div>
       </section>
+
+      {error && <LoadError message={error} onRetry={() => setRefreshKey((key) => key + 1)} />}
 
       <section className="metrics-grid" aria-label="Indicateurs trésorerie">
         <MetricCard label="Total encaissé" value={data ? data.summary.totalEncaisse : '—'} icon={WalletCards} tone="navy" />

@@ -5,8 +5,10 @@ import { AlertTriangle, CreditCard, Percent, Plus, Search, Users, Wallet, Wallet
 import { AppShell } from '@/components/app-shell'
 import { Modal } from '@/components/modal'
 import { DiscountScaleModal } from '@/components/discount-scale-modal'
+import { LoadError } from '@/components/load-error'
 import { authClient } from '@/lib/auth-client'
 import { downloadCsv } from '@/lib/download-csv'
+import { fetchJson } from '@/lib/fetch-json'
 
 type Client = {
   id: number
@@ -62,6 +64,8 @@ function NewClientForm({ storeOptions, onCreated }: { storeOptions: StoreOption[
         return
       }
       onCreated()
+    } catch {
+      setError('Connexion instable — impossible de contacter le serveur. Réessayez.')
     } finally {
       setSubmitting(false)
     }
@@ -107,6 +111,8 @@ function RecordPaymentForm({ client, storeOptions, onCreated }: { client: Client
         return
       }
       onCreated()
+    } catch {
+      setError('Connexion instable — impossible de contacter le serveur. Réessayez.')
     } finally {
       setSubmitting(false)
     }
@@ -145,6 +151,7 @@ export function ClientsView() {
   const [search, setSearch] = useState('')
   const [data, setData] = useState<ClientsData | null>(null)
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
   const [storeOptions, setStoreOptions] = useState<StoreOption[]>([])
   const [clientModalOpen, setClientModalOpen] = useState(false)
   const [paymentClient, setPaymentClient] = useState<Client | null>(null)
@@ -153,11 +160,12 @@ export function ClientsView() {
 
   useEffect(() => {
     setLoading(true)
-    fetch('/api/clients')
-      .then((res) => res.json())
-      .then((json: ClientsData) => setData(json))
+    setError('')
+    fetchJson<ClientsData>('/api/clients')
+      .then((json) => setData(json))
+      .catch((err) => setError(err instanceof Error ? err.message : 'Erreur inconnue.'))
       .finally(() => setLoading(false))
-    fetch('/api/magasins').then((res) => res.json()).then((json: { stores: StoreOption[] }) => setStoreOptions(json.stores))
+    fetchJson<{ stores: StoreOption[] }>('/api/magasins').then((json) => setStoreOptions(json.stores)).catch(() => {})
   }, [refreshKey])
 
   const filteredClients = useMemo(() => {
@@ -172,6 +180,8 @@ export function ClientsView() {
       <section className="page-heading">
         <div><p className="eyebrow">RECOUVREMENT</p><h1>Clients <span>et créances</span></h1><p className="heading-subtitle">Suivez les soldes clients et les échéances de paiement.</p></div>
       </section>
+
+      {error && <LoadError message={error} onRetry={() => setRefreshKey((key) => key + 1)} />}
 
       <section className="metrics-grid" aria-label="Indicateurs clients" style={{ gridTemplateColumns: 'repeat(3, minmax(0, 1fr))' }}>
         <MetricCard label="Clients suivis" value={data ? `${data.summary.totalClients}` : '—'} icon={Users} tone="navy" />

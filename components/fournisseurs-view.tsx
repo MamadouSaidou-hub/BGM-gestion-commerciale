@@ -5,7 +5,9 @@ import { AlertTriangle, Package, Percent, Plus, Search, Truck, Wallet, WalletCar
 import { AppShell } from '@/components/app-shell'
 import { Modal } from '@/components/modal'
 import { DiscountScaleModal } from '@/components/discount-scale-modal'
+import { LoadError } from '@/components/load-error'
 import { downloadCsv } from '@/lib/download-csv'
+import { fetchJson } from '@/lib/fetch-json'
 
 type Supplier = {
   id: number
@@ -60,6 +62,8 @@ function NewSupplierForm({ onCreated }: { onCreated: () => void }) {
         return
       }
       onCreated()
+    } catch {
+      setError('Connexion instable — impossible de contacter le serveur. Réessayez.')
     } finally {
       setSubmitting(false)
     }
@@ -126,6 +130,8 @@ function RecordDeliveryForm({
         return
       }
       onCreated()
+    } catch {
+      setError('Connexion instable — impossible de contacter le serveur. Réessayez.')
     } finally {
       setSubmitting(false)
     }
@@ -199,6 +205,8 @@ function RecordSupplierPaymentForm({ supplier, onCreated }: { supplier: Supplier
         return
       }
       onCreated()
+    } catch {
+      setError('Connexion instable — impossible de contacter le serveur. Réessayez.')
     } finally {
       setSubmitting(false)
     }
@@ -229,6 +237,7 @@ export function FournisseursView() {
   const [search, setSearch] = useState('')
   const [data, setData] = useState<SuppliersData | null>(null)
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
   const [storeOptions, setStoreOptions] = useState<StoreOption[]>([])
   const [productOptions, setProductOptions] = useState<ProductOption[]>([])
   const [supplierModalOpen, setSupplierModalOpen] = useState(false)
@@ -239,12 +248,13 @@ export function FournisseursView() {
 
   useEffect(() => {
     setLoading(true)
-    fetch('/api/fournisseurs')
-      .then((res) => res.json())
-      .then((json: SuppliersData) => setData(json))
+    setError('')
+    fetchJson<SuppliersData>('/api/fournisseurs')
+      .then((json) => setData(json))
+      .catch((err) => setError(err instanceof Error ? err.message : 'Erreur inconnue.'))
       .finally(() => setLoading(false))
-    fetch('/api/magasins').then((res) => res.json()).then((json: { stores: StoreOption[] }) => setStoreOptions(json.stores))
-    fetch('/api/products').then((res) => res.json()).then((json: { products: ProductOption[] }) => setProductOptions(json.products))
+    fetchJson<{ stores: StoreOption[] }>('/api/magasins').then((json) => setStoreOptions(json.stores)).catch(() => {})
+    fetchJson<{ products: ProductOption[] }>('/api/products').then((json) => setProductOptions(json.products)).catch(() => {})
   }, [refreshKey])
 
   const filteredSuppliers = useMemo(() => {
@@ -259,6 +269,8 @@ export function FournisseursView() {
       <section className="page-heading">
         <div><p className="eyebrow">APPROVISIONNEMENT</p><h1>Fournisseurs <span>et livraisons</span></h1><p className="heading-subtitle">Suivez les livraisons reçues et les sommes dues à vos fournisseurs.</p></div>
       </section>
+
+      {error && <LoadError message={error} onRetry={() => setRefreshKey((key) => key + 1)} />}
 
       <section className="metrics-grid" aria-label="Indicateurs fournisseurs" style={{ gridTemplateColumns: 'repeat(3, minmax(0, 1fr))' }}>
         <MetricCard label="Fournisseurs" value={data ? `${data.summary.totalSuppliers}` : '—'} icon={Truck} tone="navy" />

@@ -4,7 +4,9 @@ import { useEffect, useMemo, useState } from 'react'
 import { ChevronDown, CreditCard, Plus, Receipt, Search, ShoppingCart, Trash2, WalletCards } from 'lucide-react'
 import { AppShell } from '@/components/app-shell'
 import { Modal } from '@/components/modal'
+import { LoadError } from '@/components/load-error'
 import { downloadCsv } from '@/lib/download-csv'
+import { fetchJson } from '@/lib/fetch-json'
 
 const periods = ['Aujourd’hui', '7 derniers jours', 'Ce mois-ci']
 
@@ -234,6 +236,7 @@ export function SalesView() {
   const [search, setSearch] = useState('')
   const [data, setData] = useState<SalesData | null>(null)
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
   const [storeOptions, setStoreOptions] = useState<StoreOption[]>([])
   const [clientOptions, setClientOptions] = useState<ClientOption[]>([])
   const [productOptions, setProductOptions] = useState<ProductOption[]>([])
@@ -243,11 +246,14 @@ export function SalesView() {
   useEffect(() => {
     let cancelled = false
     setLoading(true)
+    setError('')
     const params = new URLSearchParams({ period, store })
-    fetch(`/api/ventes?${params.toString()}`)
-      .then((res) => res.json())
-      .then((json: SalesData) => {
+    fetchJson<SalesData>(`/api/ventes?${params.toString()}`)
+      .then((json) => {
         if (!cancelled) setData(json)
+      })
+      .catch((err) => {
+        if (!cancelled) setError(err instanceof Error ? err.message : 'Erreur inconnue.')
       })
       .finally(() => {
         if (!cancelled) setLoading(false)
@@ -258,9 +264,9 @@ export function SalesView() {
   }, [period, store, refreshKey])
 
   useEffect(() => {
-    fetch('/api/magasins').then((res) => res.json()).then((json: { stores: StoreOption[] }) => setStoreOptions(json.stores))
-    fetch('/api/clients/options').then((res) => res.json()).then((json: { clients: ClientOption[] }) => setClientOptions(json.clients))
-    fetch('/api/products').then((res) => res.json()).then((json: { products: ProductOption[] }) => setProductOptions(json.products))
+    fetchJson<{ stores: StoreOption[] }>('/api/magasins').then((json) => setStoreOptions(json.stores)).catch(() => {})
+    fetchJson<{ clients: ClientOption[] }>('/api/clients/options').then((json) => setClientOptions(json.clients)).catch(() => {})
+    fetchJson<{ products: ProductOption[] }>('/api/products').then((json) => setProductOptions(json.products)).catch(() => {})
   }, [refreshKey])
 
   const stores = data?.stores ?? ['Tous les magasins']
@@ -280,6 +286,8 @@ export function SalesView() {
           <label className="select-wrap"><span className="sr-only">Magasin</span><select value={store} onChange={(event) => setStore(event.target.value)}>{stores.map((item) => <option key={item}>{item}</option>)}</select><ChevronDown /></label>
         </div>
       </section>
+
+      {error && <LoadError message={error} onRetry={() => setRefreshKey((key) => key + 1)} />}
 
       <section className="metrics-grid" aria-label="Indicateurs ventes">
         <MetricCard label="Nombre de ventes" value={data ? `${data.summary.count}` : '—'} icon={ShoppingCart} tone="navy" />

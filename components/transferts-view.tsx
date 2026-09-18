@@ -4,7 +4,9 @@ import { useEffect, useMemo, useState } from 'react'
 import { ArrowLeftRight, Boxes, ChevronDown, Clock, Plus, Search, Trash2, Truck } from 'lucide-react'
 import { AppShell } from '@/components/app-shell'
 import { Modal } from '@/components/modal'
+import { LoadError } from '@/components/load-error'
 import { downloadCsv } from '@/lib/download-csv'
+import { fetchJson } from '@/lib/fetch-json'
 
 const periods = ['Aujourd’hui', '7 derniers jours', 'Ce mois-ci']
 
@@ -98,6 +100,8 @@ function NewTransferForm({
         return
       }
       onCreated()
+    } catch {
+      setError('Connexion instable — impossible de contacter le serveur. Réessayez.')
     } finally {
       setSubmitting(false)
     }
@@ -147,6 +151,7 @@ export function TransfertsView() {
   const [search, setSearch] = useState('')
   const [data, setData] = useState<TransfersData | null>(null)
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
   const [storeOptions, setStoreOptions] = useState<StoreOption[]>([])
   const [productOptions, setProductOptions] = useState<ProductOption[]>([])
   const [modalOpen, setModalOpen] = useState(false)
@@ -156,11 +161,14 @@ export function TransfertsView() {
   useEffect(() => {
     let cancelled = false
     setLoading(true)
+    setError('')
     const params = new URLSearchParams({ period, store })
-    fetch(`/api/transferts?${params.toString()}`)
-      .then((res) => res.json())
-      .then((json: TransfersData) => {
+    fetchJson<TransfersData>(`/api/transferts?${params.toString()}`)
+      .then((json) => {
         if (!cancelled) setData(json)
+      })
+      .catch((err) => {
+        if (!cancelled) setError(err instanceof Error ? err.message : 'Erreur inconnue.')
       })
       .finally(() => {
         if (!cancelled) setLoading(false)
@@ -171,8 +179,8 @@ export function TransfertsView() {
   }, [period, store, refreshKey])
 
   useEffect(() => {
-    fetch('/api/magasins').then((res) => res.json()).then((json: { stores: StoreOption[] }) => setStoreOptions(json.stores))
-    fetch('/api/products').then((res) => res.json()).then((json: { products: ProductOption[] }) => setProductOptions(json.products))
+    fetchJson<{ stores: StoreOption[] }>('/api/magasins').then((json) => setStoreOptions(json.stores)).catch(() => {})
+    fetchJson<{ products: ProductOption[] }>('/api/products').then((json) => setProductOptions(json.products)).catch(() => {})
   }, [refreshKey])
 
   const stores = data?.stores ?? ['Tous les magasins']
@@ -185,9 +193,17 @@ export function TransfertsView() {
 
   async function handleReceive(id: number) {
     setReceivingId(id)
+    setError('')
     try {
       const res = await fetch(`/api/transferts/${id}/receive`, { method: 'POST' })
-      if (res.ok) setRefreshKey((key) => key + 1)
+      if (res.ok) {
+        setRefreshKey((key) => key + 1)
+      } else {
+        const json = await res.json().catch(() => ({}))
+        setError(json.error ?? 'Une erreur est survenue.')
+      }
+    } catch {
+      setError('Connexion instable — impossible de contacter le serveur. Réessayez.')
     } finally {
       setReceivingId(null)
     }
@@ -202,6 +218,8 @@ export function TransfertsView() {
           <label className="select-wrap"><span className="sr-only">Magasin</span><select value={store} onChange={(event) => setStore(event.target.value)}>{stores.map((item) => <option key={item}>{item}</option>)}</select><ChevronDown /></label>
         </div>
       </section>
+
+      {error && <LoadError message={error} onRetry={() => setRefreshKey((key) => key + 1)} />}
 
       <section className="metrics-grid" aria-label="Indicateurs transferts">
         <MetricCard label="Nombre de transferts" value={data ? `${data.summary.count}` : '—'} icon={ArrowLeftRight} tone="navy" />

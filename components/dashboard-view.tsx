@@ -14,6 +14,8 @@ import {
   WalletCards,
 } from 'lucide-react'
 import { AppShell } from '@/components/app-shell'
+import { LoadError } from '@/components/load-error'
+import { fetchJson } from '@/lib/fetch-json'
 
 const periods = ['Aujourd’hui', '7 derniers jours', 'Ce mois-ci']
 
@@ -53,15 +55,20 @@ export function DashboardView() {
   const [store, setStore] = useState('Tous les magasins')
   const [data, setData] = useState<DashboardData | null>(null)
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+  const [refreshKey, setRefreshKey] = useState(0)
 
   useEffect(() => {
     let cancelled = false
     setLoading(true)
+    setError('')
     const params = new URLSearchParams({ period, store })
-    fetch(`/api/dashboard?${params.toString()}`)
-      .then((res) => res.json())
-      .then((json: DashboardData) => {
+    fetchJson<DashboardData>(`/api/dashboard?${params.toString()}`)
+      .then((json) => {
         if (!cancelled) setData(json)
+      })
+      .catch((err) => {
+        if (!cancelled) setError(err instanceof Error ? err.message : 'Erreur inconnue.')
       })
       .finally(() => {
         if (!cancelled) setLoading(false)
@@ -69,7 +76,7 @@ export function DashboardView() {
     return () => {
       cancelled = true
     }
-  }, [period, store])
+  }, [period, store, refreshKey])
 
   const stores = data?.stores ?? ['Tous les magasins']
   const sales = data?.salesTrend ?? []
@@ -89,6 +96,8 @@ export function DashboardView() {
           <label className="select-wrap"><span className="sr-only">Magasin</span><select value={store} onChange={(event) => setStore(event.target.value)}>{stores.map((item) => <option key={item}>{item}</option>)}</select><ChevronDown /></label>
         </div>
       </section>
+
+      {error && <LoadError message={error} onRetry={() => setRefreshKey((key) => key + 1)} />}
 
       {data && (data.dueAlerts.overdue.length > 0 || data.dueAlerts.upcoming.length > 0) && (
         <section className="due-banner" aria-label="Échéances">

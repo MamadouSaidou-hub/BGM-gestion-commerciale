@@ -4,7 +4,9 @@ import { useEffect, useState } from 'react'
 import { Pencil, Plus, ShieldCheck, Trash2, Users } from 'lucide-react'
 import { AppShell } from '@/components/app-shell'
 import { Modal } from '@/components/modal'
+import { LoadError } from '@/components/load-error'
 import { authClient } from '@/lib/auth-client'
+import { fetchJson } from '@/lib/fetch-json'
 
 type UserRow = { id: string; name: string; email: string; role: string; storeId: number | null; store: string }
 type StoreOption = { id: number; name: string }
@@ -51,6 +53,8 @@ function NewUserForm({ storeOptions, onCreated }: { storeOptions: StoreOption[];
         return
       }
       onCreated()
+    } catch {
+      setError('Connexion instable — impossible de contacter le serveur. Réessayez.')
     } finally {
       setSubmitting(false)
     }
@@ -118,6 +122,8 @@ function EditUserForm({
         return
       }
       onSaved()
+    } catch {
+      setError('Connexion instable — impossible de contacter le serveur. Réessayez.')
     } finally {
       setSubmitting(false)
     }
@@ -155,6 +161,7 @@ export function UtilisateursView() {
   const [users, setUsers] = useState<UserRow[]>([])
   const [storeOptions, setStoreOptions] = useState<StoreOption[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
   const [modalOpen, setModalOpen] = useState(false)
   const [editingUser, setEditingUser] = useState<UserRow | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
@@ -164,10 +171,13 @@ export function UtilisateursView() {
   useEffect(() => {
     let cancelled = false
     setLoading(true)
-    fetch('/api/utilisateurs')
-      .then((res) => res.json())
-      .then((json: { users: UserRow[] }) => {
+    setError('')
+    fetchJson<{ users: UserRow[] }>('/api/utilisateurs')
+      .then((json) => {
         if (!cancelled) setUsers(json.users ?? [])
+      })
+      .catch((err) => {
+        if (!cancelled) setError(err instanceof Error ? err.message : 'Erreur inconnue.')
       })
       .finally(() => {
         if (!cancelled) setLoading(false)
@@ -178,7 +188,7 @@ export function UtilisateursView() {
   }, [refreshKey])
 
   useEffect(() => {
-    fetch('/api/magasins').then((res) => res.json()).then((json: { stores: StoreOption[] }) => setStoreOptions(json.stores))
+    fetchJson<{ stores: StoreOption[] }>('/api/magasins').then((json) => setStoreOptions(json.stores)).catch(() => {})
   }, [refreshKey])
 
   const adminCount = users.filter((u) => u.role === 'admin').length
@@ -195,6 +205,8 @@ export function UtilisateursView() {
         return
       }
       setRefreshKey((key) => key + 1)
+    } catch {
+      setDeleteError('Connexion instable — impossible de contacter le serveur. Réessayez.')
     } finally {
       setDeletingId(null)
     }
@@ -205,6 +217,8 @@ export function UtilisateursView() {
       <section className="page-heading">
         <div><p className="eyebrow">ACCÈS</p><h1>Utilisateurs <span>et permissions</span></h1><p className="heading-subtitle">Gérez les comptes administrateurs et gestionnaires de magasin.</p></div>
       </section>
+
+      {error && <LoadError message={error} onRetry={() => setRefreshKey((key) => key + 1)} />}
 
       <section className="metrics-grid" aria-label="Indicateurs utilisateurs">
         <MetricCard label="Total comptes" value={`${users.length}`} icon={Users} tone="navy" />

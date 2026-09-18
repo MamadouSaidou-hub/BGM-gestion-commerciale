@@ -4,6 +4,8 @@ import { useEffect, useState } from 'react'
 import { AlertTriangle, Package, Plus, ShoppingCart, Store, WalletCards } from 'lucide-react'
 import { AppShell } from '@/components/app-shell'
 import { Modal } from '@/components/modal'
+import { LoadError } from '@/components/load-error'
+import { fetchJson } from '@/lib/fetch-json'
 
 type StoreRow = {
   id: number
@@ -37,6 +39,8 @@ function NewStoreForm({ onCreated }: { onCreated: () => void }) {
         return
       }
       onCreated()
+    } catch {
+      setError('Connexion instable — impossible de contacter le serveur. Réessayez.')
     } finally {
       setSubmitting(false)
     }
@@ -54,13 +58,15 @@ function NewStoreForm({ onCreated }: { onCreated: () => void }) {
 
 export function StoresView() {
   const [stores, setStores] = useState<StoreRow[] | null>(null)
+  const [error, setError] = useState('')
   const [modalOpen, setModalOpen] = useState(false)
   const [refreshKey, setRefreshKey] = useState(0)
 
   useEffect(() => {
-    fetch('/api/magasins')
-      .then((res) => res.json())
-      .then((json: { stores: StoreRow[] }) => setStores(json.stores))
+    setError('')
+    fetchJson<{ stores: StoreRow[] }>('/api/magasins')
+      .then((json) => setStores(json.stores))
+      .catch((err) => setError(err instanceof Error ? err.message : 'Erreur inconnue.'))
   }, [refreshKey])
 
   return (
@@ -71,6 +77,8 @@ export function StoresView() {
           <button className="btn-primary" onClick={() => setModalOpen(true)}><Plus size={14} /> Nouveau magasin</button>
         </div>
       </section>
+
+      {error && <LoadError message={error} onRetry={() => setRefreshKey((key) => key + 1)} />}
 
       <div className="store-card-grid">
         {(stores ?? []).map((store) => (
