@@ -147,3 +147,17 @@ Vérifié : `tsc` propre, les 17 tests Vitest toujours verts, et un test manuel 
 **Non traité** (hors périmètre de ce changement, à signaler si demandé) : pas de vrai mode hors-ligne (pas de service worker, pas de queue de synchronisation) — l'app a toujours besoin d'une connexion pour fonctionner, elle est juste beaucoup plus tolérante aux coupures/lenteurs ponctuelles maintenant, avec un retour visuel clair au lieu d'un écran figé.
 
 Vérifié : `tsc` propre, les 17 tests Vitest toujours verts, et un test manuel via `pnpm dev` confirmant que toutes les pages se chargent normalement et que les données API sont inchangées après le refactor.
+
+## 11. Index de base de données pour la montée en charge (18/09/2026)
+
+**Contexte** : question de l'utilisateur sur la tenue en charge avec plusieurs utilisateurs simultanés. Audit : Postgres n'indexe **pas automatiquement** les clés étrangères (contrairement à SQLite qui gérait tout en un seul fichier local sans coût réseau) — aucune des colonnes utilisées dans les `WHERE`/`JOIN` fréquents (`storeId`, `clientId`, `supplierId`, `createdAt` pour les filtres de période, etc.) n'avait d'index au-delà des clés primaires.
+
+**Corrigé** : 37 index ajoutés dans `lib/db/schema.ts` et `lib/db/auth-schema.ts` (syntaxe `pgTable(name, columns, (table) => [index(...).on(...)])`), couvrant toutes les colonnes identifiées par un grep systématique des `eq()`/`gte()`/`lt()` dans `lib/db/queries/*.ts` et `lib/db/mutations/*.ts`. Le plus chaud : `discount_scales_party_idx` sur `(party_type, party_id)` — `getOrCreateScale()` est appelé à chaque vente et chaque livraison fournisseur. Poussé sur la vraie base via `db:push`, vérifié directement en base (37 index confirmés présents via `pg_indexes`).
+
+**Ce que ça change concrètement** : sans index, Postgres doit parcourir toute la table (`sales`, `stock_movements`, etc.) pour chaque requête filtrée — acceptable avec peu de lignes, mais le temps de réponse se dégrade linéairement avec le volume de données, et se dégrade encore plus vite si plusieurs utilisateurs interrogent en même temps (plus de scans complets concurrents = plus de pression sur le peu de connexions disponibles). Les index rendent ces requêtes quasi-instantanées indépendamment du nombre de lignes.
+
+**Limites non traitées, à garder en tête si l'usage grossit vraiment** :
+- Le pool de connexions applicatif est volontairement petit (`max: 5` dans `lib/db/client.ts`) car chaque route Vercel est une fonction serverless indépendante qui ouvre son propre pool — avec beaucoup de trafic simultané, le nombre total de connexions vers le pooler Supabase peut quand même grimper. Le connection pooler de Supabase (PgBouncer, déjà utilisé via l'URL `*.pooler.supabase.com:6543`) absorbe une bonne partie de ça, mais le **plan gratuit Supabase a un plafond de connexions/calcul** — si le nombre d'utilisateurs actifs simultanés devient réellement important (au-delà d'une poignée de magasins), passer sur un plan payant Supabase sera probablement nécessaire. C'est une décision business/coût, pas quelque chose de réglable uniquement dans le code.
+- Toujours aucun cache HTTP/SWR côté client — chaque changement de page recharge tout depuis zéro. Pas critique à l'échelle actuelle, mais à revisiter si le nombre de pages vues par utilisateur augmente beaucoup.
+
+Vérifié : `tsc` propre, `db:push` appliqué avec succès, 37 index confirmés en base, les 17 tests Vitest toujours verts.
