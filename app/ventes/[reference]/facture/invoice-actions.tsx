@@ -48,9 +48,10 @@ async function buildInvoicePdf(sale: SaleDetail) {
   const logoDataUrl = await loadImageAsDataUrl(companyInfo.logoPath)
   if (logoDataUrl) {
     try {
-      doc.addImage(logoDataUrl, 'PNG', 14, 14, 20, 20)
+      const format = logoDataUrl.includes('image/png') ? 'PNG' : 'JPEG'
+      doc.addImage(logoDataUrl, format, 14, 14, 20, 20)
     } catch {
-      // Non-PNG or unreadable image — skip the logo rather than fail the whole export.
+      // Unreadable/unsupported image — skip the logo rather than fail the whole export.
     }
   }
 
