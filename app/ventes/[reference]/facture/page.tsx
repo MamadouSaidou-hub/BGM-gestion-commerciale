@@ -1,9 +1,15 @@
 import { notFound } from 'next/navigation'
 import { getSaleDetail } from '@/lib/db/queries'
 import { getSessionContext, isAdmin } from '@/lib/session'
-import { PrintButton } from './print-button'
+import { companyInfo } from '@/lib/company-info'
+import { InvoiceActions } from './invoice-actions'
 
 const statusLabel = { paid: 'Payée', partial: 'Partielle', credit: 'À crédit' }
+const statusColor = { paid: '#2e9e3f', partial: '#f0a020', credit: '#3b82c4' }
+
+const NAVY = '#0b2e5c'
+const MUTED = '#7d8ba0'
+const BORDER = '#e3e9f1'
 
 export default async function Page({ params }: { params: Promise<{ reference: string }> }) {
   const { reference } = await params
@@ -14,70 +20,98 @@ export default async function Page({ params }: { params: Promise<{ reference: st
   if (!sale) notFound()
   if (!isAdmin(ctx) && sale.storeId !== ctx.storeId) notFound()
 
+  const status = sale.paymentStatus as keyof typeof statusLabel
+
   return (
-    <div style={{ maxWidth: 680, margin: '40px auto', padding: '0 24px', fontFamily: 'system-ui, sans-serif', color: '#142743' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 32 }}>
-        <div>
-          <div style={{ fontSize: 22, fontWeight: 800 }}>BGM</div>
-          <div style={{ fontSize: 11, color: '#7d8ba0' }}>Barry-Gate Multi Service</div>
-        </div>
-        <PrintButton />
-      </div>
+    <div style={{ background: '#f4f6f9', minHeight: '100vh', padding: '32px 16px' }}>
+      <div id="invoice-root" style={{ maxWidth: 760, margin: '0 auto', background: 'white', borderRadius: 14, boxShadow: '0 1px 3px rgba(16,33,58,.08)', overflow: 'hidden', fontFamily: 'system-ui, sans-serif', color: '#142743' }}>
+        <div style={{ height: 6, background: `linear-gradient(90deg, ${NAVY}, #2e9e3f)` }} />
 
-      <h1 style={{ fontSize: 20, marginBottom: 4 }}>Facture #{sale.reference}</h1>
-      <p style={{ fontSize: 11, color: '#7d8ba0', marginBottom: 24 }}>
-        {new Date(sale.date).toLocaleString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
-      </p>
-
-      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 24, fontSize: 12 }}>
-        <div>
-          <p style={{ fontWeight: 700, marginBottom: 4 }}>Magasin</p>
-          <p>{sale.storeName}</p>
-          <p style={{ color: '#7d8ba0' }}>{sale.storeCity}</p>
-        </div>
-        <div style={{ textAlign: 'right' }}>
-          <p style={{ fontWeight: 700, marginBottom: 4 }}>Client</p>
-          <p>{sale.clientName}</p>
-          {sale.clientPhone && <p style={{ color: '#7d8ba0' }}>{sale.clientPhone}</p>}
-        </div>
-      </div>
-
-      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, marginBottom: 20 }}>
-        <thead>
-          <tr style={{ borderBottom: '2px solid #142743' }}>
-            <th style={{ textAlign: 'left', padding: '8px 4px' }}>Article</th>
-            <th style={{ textAlign: 'right', padding: '8px 4px' }}>Qté</th>
-            <th style={{ textAlign: 'right', padding: '8px 4px' }}>P.U.</th>
-            <th style={{ textAlign: 'right', padding: '8px 4px' }}>Total</th>
-          </tr>
-        </thead>
-        <tbody>
-          {sale.items.map((item, index) => (
-            <tr key={index} style={{ borderBottom: '1px solid #eef1f5' }}>
-              <td style={{ padding: '8px 4px' }}>{item.productName} <span style={{ color: '#9aa8b8' }}>({item.sku})</span></td>
-              <td style={{ textAlign: 'right', padding: '8px 4px' }}>{item.quantity}</td>
-              <td style={{ textAlign: 'right', padding: '8px 4px' }}>{item.unitPriceFormatted}</td>
-              <td style={{ textAlign: 'right', padding: '8px 4px' }}>{item.lineTotalFormatted}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-
-      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 24 }}>
-        <div style={{ minWidth: 220, fontSize: 13 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderTop: '2px solid #142743', fontWeight: 800 }}>
-            <span>Total</span><span>{sale.totalAmountFormatted}</span>
-          </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', fontSize: 11, color: '#7d8ba0' }}>
-            <span>Statut</span><span>{statusLabel[sale.paymentStatus as keyof typeof statusLabel]}</span>
-          </div>
-          {sale.receivable && (
-            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', fontSize: 11, color: '#c17800' }}>
-              <span>Solde dû (échéance {new Date(sale.receivable.dueDate).toLocaleDateString('fr-FR')})</span>
-              <span>{sale.receivable.amountFormatted}</span>
+        <div style={{ padding: '32px 40px 0' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 20, marginBottom: 28 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={companyInfo.logoPath} alt={companyInfo.name} style={{ width: 64, height: 64, objectFit: 'contain', flexShrink: 0 }} />
+              <div>
+                <div style={{ fontSize: 17, fontWeight: 800, color: NAVY, letterSpacing: '-.3px' }}>{companyInfo.name}</div>
+                <div style={{ fontSize: 10, color: '#2e9e3f', fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase', margin: '2px 0 6px' }}>{companyInfo.tagline}</div>
+                <div style={{ fontSize: 10.5, color: MUTED, lineHeight: 1.6 }}>
+                  <div>{companyInfo.address}</div>
+                  <div>{companyInfo.phone} · {companyInfo.email}</div>
+                </div>
+              </div>
             </div>
-          )}
+            <div style={{ textAlign: 'right', flexShrink: 0 }}>
+              <div style={{ fontSize: 22, fontWeight: 800, color: NAVY, letterSpacing: '-.5px' }}>FACTURE</div>
+              <div style={{ fontSize: 12, color: MUTED, marginTop: 4 }}>N° {sale.reference}</div>
+              <div style={{ fontSize: 10.5, color: MUTED, marginTop: 2 }}>
+                {new Date(sale.date).toLocaleDateString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric' })}
+              </div>
+              <span style={{ display: 'inline-block', marginTop: 8, fontSize: 10, fontWeight: 700, padding: '4px 10px', borderRadius: 12, color: statusColor[status], background: `${statusColor[status]}1a` }}>
+                {statusLabel[status]}
+              </span>
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', gap: 24, marginBottom: 24 }}>
+            <div style={{ flex: 1, background: '#f8fafc', borderRadius: 8, padding: '14px 16px' }}>
+              <p style={{ fontSize: 9, fontWeight: 700, color: MUTED, letterSpacing: '.08em', textTransform: 'uppercase', margin: '0 0 6px' }}>Magasin</p>
+              <p style={{ fontSize: 12.5, fontWeight: 700, margin: 0 }}>{sale.storeName}</p>
+              <p style={{ fontSize: 11, color: MUTED, margin: '2px 0 0' }}>{sale.storeCity}</p>
+            </div>
+            <div style={{ flex: 1, background: '#f8fafc', borderRadius: 8, padding: '14px 16px' }}>
+              <p style={{ fontSize: 9, fontWeight: 700, color: MUTED, letterSpacing: '.08em', textTransform: 'uppercase', margin: '0 0 6px' }}>Facturé à</p>
+              <p style={{ fontSize: 12.5, fontWeight: 700, margin: 0 }}>{sale.clientName}</p>
+              {sale.clientPhone && <p style={{ fontSize: 11, color: MUTED, margin: '2px 0 0' }}>{sale.clientPhone}</p>}
+            </div>
+          </div>
         </div>
+
+        <div style={{ padding: '0 40px' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+            <thead>
+              <tr style={{ borderBottom: `2px solid ${NAVY}` }}>
+                <th style={{ textAlign: 'left', padding: '10px 6px', fontSize: 10, color: MUTED, textTransform: 'uppercase', letterSpacing: '.05em' }}>Article</th>
+                <th style={{ textAlign: 'right', padding: '10px 6px', fontSize: 10, color: MUTED, textTransform: 'uppercase', letterSpacing: '.05em' }}>Qté</th>
+                <th style={{ textAlign: 'right', padding: '10px 6px', fontSize: 10, color: MUTED, textTransform: 'uppercase', letterSpacing: '.05em' }}>P.U.</th>
+                <th style={{ textAlign: 'right', padding: '10px 6px', fontSize: 10, color: MUTED, textTransform: 'uppercase', letterSpacing: '.05em' }}>Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              {sale.items.map((item, index) => (
+                <tr key={index} style={{ borderBottom: `1px solid ${BORDER}` }}>
+                  <td style={{ padding: '10px 6px' }}>{item.productName} <span style={{ color: '#9aa8b8' }}>({item.sku})</span></td>
+                  <td style={{ textAlign: 'right', padding: '10px 6px' }}>{item.quantity}</td>
+                  <td style={{ textAlign: 'right', padding: '10px 6px' }}>{item.unitPriceFormatted}</td>
+                  <td style={{ textAlign: 'right', padding: '10px 6px', fontWeight: 600 }}>{item.lineTotalFormatted}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+
+          <div style={{ display: 'flex', justifyContent: 'flex-end', margin: '20px 0 28px' }}>
+            <div style={{ minWidth: 240 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 14px', background: NAVY, borderRadius: 8, color: 'white', fontWeight: 800, fontSize: 14 }}>
+                <span>Total à payer</span><span>{sale.totalAmountFormatted}</span>
+              </div>
+              {sale.receivable && (
+                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 14px 0', fontSize: 11, color: '#c17800', fontWeight: 700 }}>
+                  <span>Solde dû (échéance {new Date(sale.receivable.dueDate).toLocaleDateString('fr-FR')})</span>
+                  <span>{sale.receivable.amountFormatted}</span>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        <div style={{ padding: '18px 40px', borderTop: `1px solid ${BORDER}`, textAlign: 'center' }}>
+          <p style={{ fontSize: 11, color: MUTED, margin: 0 }}>Merci pour votre confiance — {companyInfo.name}</p>
+          <p style={{ fontSize: 9.5, color: '#b3bdcb', margin: '4px 0 0' }}>{companyInfo.address} · {companyInfo.phone} · {companyInfo.email}</p>
+        </div>
+      </div>
+
+      <div className="print-hide" style={{ maxWidth: 760, margin: '16px auto 0', display: 'flex', justifyContent: 'flex-end' }}>
+        <InvoiceActions sale={sale} />
       </div>
     </div>
   )

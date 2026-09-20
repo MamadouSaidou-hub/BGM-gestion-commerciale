@@ -188,3 +188,17 @@ Vérifié : `tsc` propre, API testée sur les 3 périodes (aujourd'hui/7j/mois) 
 - `computeDiscount()` : remplacé le `SELECT` puis `UPDATE`/`INSERT` par un `INSERT ... ON CONFLICT (scaleId, period) DO UPDATE` (upsert atomique).
 
 **Vérifié concrètement, pas juste en théorie** : deux nouveaux tests dans `tests/discounts.test.ts` (section "concurrency safety") lancent **10 appels réellement simultanés** (`Promise.all`) sur un fournisseur/client tout neuf sans barème existant, puis vérifient qu'il n'existe bien qu'**une seule** ligne `discount_scales`/`discount_applications` après coup. Les deux passent. 19 tests au total désormais, tous verts. `db:push` appliqué avec succès sur la vraie base, contraintes uniques confirmées via `pg_indexes`.
+
+## 14. Domaine personnalisé + refonte de la facture (18-20/09/2026)
+
+**Domaine** : `gestion.barry-gate.com` (sous-domaine de `barry-gate.com`, acheté sur Namecheap) connecté à Vercel via CNAME → `c53675af9859fe90.vercel-dns-017.com.`. Le domaine racine `barry-gate.com` reste libre pour un futur site vitrine. `BETTER_AUTH_URL` mis à jour côté utilisateur sur Vercel après le redéploiement (même piège que pour `.vercel.app` — voir section précédente sur "Invalid origin").
+
+**Facture refaite en profondeur** (`app/ventes/[reference]/facture/`) :
+- `lib/company-info.ts` (nouveau) : coordonnées de l'entreprise centralisées — nom, slogan, adresse (Madina Marché, Conakry), téléphone (620 78 60 89), e-mail (hafigioubarry@mail.com), chemin du logo (`/logo-bgm.png`). Un seul endroit à modifier si ces infos changent.
+- `page.tsx` réécrit : mise en page "pro" avec logo + identité visuelle en en-tête, badge de statut coloré, blocs Magasin/Facturé à sur fond distinct, tableau d'articles, bloc total mis en évidence (fond navy), pied de page avec coordonnées.
+- `invoice-actions.tsx` (nouveau, remplace `print-button.tsx` supprimé) : 4 actions — **Imprimer** (inchangé), **Télécharger PDF** (génère un PDF fidèle via `jspdf`/`jspdf-autotable`, logo inclus si le fichier existe), **WhatsApp** et **E-mail** (téléchargent le PDF puis ouvrent respectivement `wa.me` avec un message pré-rempli et un brouillon `mailto:`).
+- **Limite technique assumée, pas contournable proprement** : un lien `wa.me`/`mailto:` ne peut pas joindre un fichier automatiquement (restriction navigateur, pas spécifique à cette app) — d'où le PDF téléchargé en même temps, avec une note affichée à l'écran invitant à le joindre manuellement dans la conversation/le brouillon qui s'ouvre.
+
+**⚠️ Action requise de l'utilisateur, pas encore faite à la fin de cette session** : enregistrer le fichier logo fourni dans `public/logo-bgm.png`. Sans ce fichier, la page affiche une icône d'image cassée à la place du logo (le reste de la mise en page n'est pas affecté) et le PDF saute simplement le logo (le `try/catch` autour de `doc.addImage` empêche l'échec de génération). Dès que le fichier est ajouté, tout fonctionne sans autre changement de code.
+
+Vérifié : `tsc` propre, page testée en conditions réelles (référence `BG-1015`, HTML rendu contrôlé), logique de génération PDF testée en Node (fichier jetable, supprimé), les 19 tests Vitest toujours verts. Non vérifié : rendu visuel réel dans un navigateur, et les boutons WhatsApp/E-mail cliqués en conditions réelles (pas d'outil de capture d'écran/navigateur disponible).
