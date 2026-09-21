@@ -253,7 +253,7 @@ export function UtilisateursView() {
                     <td data-label="E-mail">{row.email}</td>
                     <td data-label="Rôle"><span className={`badge ${roleBadge[row.role] ?? 'badge-muted'}`}>{roleLabel[row.role] ?? row.role}</span></td>
                     <td data-label="Magasin">{row.role === 'admin' ? 'Tous les magasins' : row.store}</td>
-                    <td data-label="" style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
+                    <td data-label="" style={{ display: 'flex', gap: 6, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
                       <button
                         type="button"
                         className="icon-button"

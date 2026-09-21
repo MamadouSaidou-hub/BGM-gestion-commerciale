@@ -171,9 +171,9 @@ export function InvoiceActions({ sale }: { sale: SaleDetail }) {
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 8 }}>
-      {hint && <p style={{ fontSize: 10, color: 'var(--faint)', margin: 0, textAlign: 'right', maxWidth: 320 }}>{hint}</p>}
-      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+    <div className="invoice-actions-inner">
+      {hint && <p style={{ fontSize: 10, color: 'var(--faint)', margin: 0, maxWidth: 320 }}>{hint}</p>}
+      <div className="invoice-actions-buttons">
         <button type="button" className="btn-secondary" disabled={generating !== null} onClick={handleShareEmail}>
           <Mail size={13} /> {generating === 'email' ? 'Préparation...' : 'E-mail'}
         </button>

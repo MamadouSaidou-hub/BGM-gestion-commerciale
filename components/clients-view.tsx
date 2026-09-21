@@ -220,7 +220,7 @@ export function ClientsView() {
                   <td data-label="Encaissé">{client.totalPaid}</td>
                   <td data-label="Créance">{client.outstanding}</td>
                   <td data-label="Statut"><span className={`badge ${statusBadge[client.status]}`}>{statusLabel[client.status]}</span></td>
-                  <td style={{ display: 'flex', gap: 6 }}>
+                  <td style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                     {client.status !== 'ok' && (
                       <button className="btn-ghost" onClick={() => setPaymentClient(client)}><WalletCards size={12} style={{ verticalAlign: 'middle', marginRight: 4 }} />Encaisser</button>
                     )}

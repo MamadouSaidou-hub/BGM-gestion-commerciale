@@ -309,7 +309,7 @@ export function FournisseursView() {
                   <td data-label="Payé">{supplier.totalPaid}</td>
                   <td data-label="Dû">{supplier.owed}</td>
                   <td data-label="Statut"><span className={`badge ${statusBadge[supplier.status]}`}>{statusLabel[supplier.status]}</span></td>
-                  <td style={{ display: 'flex', gap: 6 }}>
+                  <td style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                     <button className="btn-ghost" onClick={() => setDeliverySupplier(supplier)}><Package size={12} style={{ verticalAlign: 'middle', marginRight: 4 }} />Livraison</button>
                     {supplier.status !== 'ok' && (
                       <button className="btn-ghost" onClick={() => setPaymentSupplier(supplier)}><WalletCards size={12} style={{ verticalAlign: 'middle', marginRight: 4 }} />Payer</button>
