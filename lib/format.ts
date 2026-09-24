@@ -1,5 +1,5 @@
 export function formatFcfa(value: number) {
-  return `${Math.round(value).toLocaleString('fr-FR')} FCFA`
+  return `${Math.round(value).toLocaleString('fr-FR')} GNF`
 }
 
 export function pctChange(current: number, previous: number) {

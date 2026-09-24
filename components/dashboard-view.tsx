@@ -133,7 +133,7 @@ export function DashboardView() {
             <div className="chart-y"><span>{Math.round(maxSales / 1000)}K</span><span>{Math.round((maxSales * 0.66) / 1000)}K</span><span>{Math.round((maxSales * 0.33) / 1000)}K</span><span>0</span></div>
             <div className="bar-chart">{sales.map((item) => <div className="bar-group" key={item.day}><div className="bar-track"><div className="bar" style={{ height: `${(item.value / maxSales) * 100}%` }} /></div><span>{item.day}</span></div>)}</div>
           </div>
-          <div className="chart-total"><strong>{loading ? '…' : `${(totalPeriodRevenue / 1_000_000).toFixed(2)}M FCFA`}</strong><span><ArrowUpRight /> {data?.metrics.revenue.trend ?? ''} vs période précédente</span></div>
+          <div className="chart-total"><strong>{loading ? '…' : `${(totalPeriodRevenue / 1_000_000).toFixed(2)}M GNF`}</strong><span><ArrowUpRight /> {data?.metrics.revenue.trend ?? ''} vs période précédente</span></div>
         </article>
         <article className="panel store-panel">
           <div className="panel-header"><div><h2>Performance magasins</h2><p>Répartition du chiffre d’affaires</p></div><button className="more-button" aria-label="Plus d'options">•••</button></div>

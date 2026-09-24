@@ -2,8 +2,8 @@ export const companyInfo = {
   name: 'BARRY-GATE MULTI SERVICE',
   tagline: 'Commerce · Import',
   address: 'Madina Marché, Conakry, Guinée',
-  phone: '620 78 60 89',
-  phoneIntl: '+224620786089',
-  email: 'hafigioubarry@mail.com',
+  phone: '629 59 09 64',
+  phoneIntl: '+224629590964',
+  email: 'hafizbillebarry@gmail.com',
   logoPath: '/logo-bgm.jpeg',
 }

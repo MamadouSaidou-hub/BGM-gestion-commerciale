@@ -85,7 +85,7 @@ function NewPaymentForm({ storeOptions, clientOptions, onCreated }: { storeOptio
         </select>
       </div>
       <div className="form-row">
-        <div className="form-field"><label>Montant (FCFA)</label><input required type="number" min="1" value={amount} onChange={(event) => setAmount(event.target.value)} /></div>
+        <div className="form-field"><label>Montant (GNF)</label><input required type="number" min="1" value={amount} onChange={(event) => setAmount(event.target.value)} /></div>
         <div className="form-field">
           <label>Méthode</label>
           <select value={method} onChange={(event) => setMethod(event.target.value as typeof method)}>

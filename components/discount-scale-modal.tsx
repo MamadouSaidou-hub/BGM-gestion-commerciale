@@ -149,7 +149,7 @@ export function DiscountScaleModal({
           {tiers.map((tier, index) => (
             <div className="item-row-grid" style={{ gridTemplateColumns: '1fr 1fr auto' }} key={index}>
               <div className="form-field" style={{ marginBottom: 0 }}><input required type="number" min="1" placeholder="Seuil (sacs)" value={tier.thresholdSacks} onChange={(event) => updateTier(index, { thresholdSacks: event.target.value })} /></div>
-              <div className="form-field" style={{ marginBottom: 0 }}><input required type="number" min="0" placeholder="Remise/sac (FCFA)" value={tier.discountPerSack} onChange={(event) => updateTier(index, { discountPerSack: event.target.value })} /></div>
+              <div className="form-field" style={{ marginBottom: 0 }}><input required type="number" min="0" placeholder="Remise/sac (GNF)" value={tier.discountPerSack} onChange={(event) => updateTier(index, { discountPerSack: event.target.value })} /></div>
               <button type="button" className="item-row-remove" onClick={() => removeTier(index)} aria-label="Retirer le palier"><Trash2 size={14} /></button>
             </div>
           ))}

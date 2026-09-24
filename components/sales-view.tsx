@@ -206,7 +206,7 @@ function NewSaleForm({
       })}
       <button type="button" className="item-add-link" onClick={addItem}><Plus size={13} /> Ajouter un article</button>
 
-      <div className="sale-total-row"><span>Total</span><span>{total.toLocaleString('fr-FR')} FCFA</span></div>
+      <div className="sale-total-row"><span>Total</span><span>{total.toLocaleString('fr-FR')} GNF</span></div>
 
       <div className="form-row">
         <div className="form-field">

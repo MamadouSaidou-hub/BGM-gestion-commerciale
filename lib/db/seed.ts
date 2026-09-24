@@ -63,10 +63,10 @@ async function seed() {
   const productRows = await db
     .insert(products)
     .values([
-      { name: 'Farine de blé T55 50kg', sku: 'FAR-T55-50', category: 'Farine de blé', unitPrice: 36000, costPrice: 30500, reorderThreshold: 20, sackWeightKg: 50 },
-      { name: 'Farine complète 50kg', sku: 'FAR-CPL-50', category: 'Farine complète', unitPrice: 38000, costPrice: 32000, reorderThreshold: 15, sackWeightKg: 50 },
-      { name: 'Farine boulangère 50kg', sku: 'FAR-BLG-50', category: 'Farine boulangère', unitPrice: 37000, costPrice: 31000, reorderThreshold: 20, sackWeightKg: 50 },
-      { name: 'Farine pâtissière 50kg', sku: 'FAR-PAT-50', category: 'Farine pâtissière', unitPrice: 39000, costPrice: 33000, reorderThreshold: 15, sackWeightKg: 50 },
+      { name: 'Farine de blé T55 50kg', sku: 'FAR-T55-50', category: 'Farine de blé', unitPrice: 330000, costPrice: 30500, reorderThreshold: 20, sackWeightKg: 50 },
+      { name: 'Farine complète 50kg', sku: 'FAR-CPL-50', category: 'Farine complète', unitPrice: 330000, costPrice: 32000, reorderThreshold: 15, sackWeightKg: 50 },
+      { name: 'Farine boulangère 50kg', sku: 'FAR-BLG-50', category: 'Farine boulangère', unitPrice: 330000, costPrice: 31000, reorderThreshold: 20, sackWeightKg: 50 },
+      { name: 'Farine pâtissière 50kg', sku: 'FAR-PAT-50', category: 'Farine pâtissière', unitPrice: 330000, costPrice: 33000, reorderThreshold: 15, sackWeightKg: 50 },
     ])
     .returning()
 

@@ -217,7 +217,7 @@ function RecordSupplierPaymentForm({ supplier, onCreated }: { supplier: Supplier
       {error && <p className="form-error">{error}</p>}
       <p className="section-subtitle">Dû au fournisseur : <strong>{supplier.owed}</strong></p>
       <div className="form-row">
-        <div className="form-field"><label>Montant payé (FCFA)</label><input required type="number" min="1" value={amount} onChange={(event) => setAmount(event.target.value)} /></div>
+        <div className="form-field"><label>Montant payé (GNF)</label><input required type="number" min="1" value={amount} onChange={(event) => setAmount(event.target.value)} /></div>
         <div className="form-field">
           <label>Méthode</label>
           <select value={method} onChange={(event) => setMethod(event.target.value as typeof method)}>

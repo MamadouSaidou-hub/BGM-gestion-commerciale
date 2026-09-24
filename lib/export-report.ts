@@ -142,35 +142,35 @@ export function exportReportExcel(data: ReportsData, periodLabel: string) {
     [`Généré le ${new Date().toLocaleString('fr-FR')}`],
     [],
     ['Indicateur', 'Valeur'],
-    ['Chiffre d’affaires (FCFA)', data.totalRevenue],
-    ['Marge brute (FCFA)', data.totalMargin],
+    ['Chiffre d’affaires (GNF)', data.totalRevenue],
+    ['Marge brute (GNF)', data.totalMargin],
     ['Marge (%)', Number(data.marginPct.toFixed(1))],
     ['Nombre de ventes', data.salesCount],
-    ['Panier moyen (FCFA)', Math.round(data.avgBasket)],
+    ['Panier moyen (GNF)', Math.round(data.avgBasket)],
     ['Sacs reçus (fournisseurs)', data.supplierSummary.totalSacks],
     ['Livraisons fournisseurs', data.supplierSummary.deliveriesCount],
-    ['Payé aux fournisseurs (FCFA)', data.supplierSummary.totalPaid],
+    ['Payé aux fournisseurs (GNF)', data.supplierSummary.totalPaid],
   ])
   XLSX.utils.book_append_sheet(workbook, summarySheet, 'Résumé')
 
-  const trendSheet = XLSX.utils.json_to_sheet(data.salesTrend.map((row) => ({ Période: row.label, 'Chiffre d’affaires (FCFA)': row.value })))
+  const trendSheet = XLSX.utils.json_to_sheet(data.salesTrend.map((row) => ({ Période: row.label, 'Chiffre d’affaires (GNF)': row.value })))
   XLSX.utils.book_append_sheet(workbook, trendSheet, 'Évolution ventes')
 
-  const storeSheet = XLSX.utils.json_to_sheet(data.storeRevenue.map((row) => ({ Magasin: row.name, 'Montant (FCFA)': row.amount })))
+  const storeSheet = XLSX.utils.json_to_sheet(data.storeRevenue.map((row) => ({ Magasin: row.name, 'Montant (GNF)': row.amount })))
   XLSX.utils.book_append_sheet(workbook, storeSheet, 'Par magasin')
 
   const paymentSheet = XLSX.utils.json_to_sheet(
-    data.paymentBreakdown.map((row) => ({ Statut: row.label, 'Nb ventes': row.count, 'Montant (FCFA)': row.amount })),
+    data.paymentBreakdown.map((row) => ({ Statut: row.label, 'Nb ventes': row.count, 'Montant (GNF)': row.amount })),
   )
   XLSX.utils.book_append_sheet(workbook, paymentSheet, 'Statuts paiement')
 
   const productsSheet = XLSX.utils.json_to_sheet(
-    data.topProducts.map((row) => ({ Produit: row.name, 'Quantité (sacs)': row.quantity, 'Chiffre d’affaires (FCFA)': row.revenue })),
+    data.topProducts.map((row) => ({ Produit: row.name, 'Quantité (sacs)': row.quantity, 'Chiffre d’affaires (GNF)': row.revenue })),
   )
   XLSX.utils.book_append_sheet(workbook, productsSheet, 'Top produits')
 
   const clientsSheet = XLSX.utils.json_to_sheet(
-    data.topClients.map((row) => ({ Client: row.name, 'Nb ventes': row.salesCount, 'Chiffre d’affaires (FCFA)': row.revenue })),
+    data.topClients.map((row) => ({ Client: row.name, 'Nb ventes': row.salesCount, 'Chiffre d’affaires (GNF)': row.revenue })),
   )
   XLSX.utils.book_append_sheet(workbook, clientsSheet, 'Top clients')
 

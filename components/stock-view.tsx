@@ -91,8 +91,8 @@ function NewProductForm({ storeOptions, onCreated }: { storeOptions: StoreOption
         <div className="form-field"><label>Catégorie</label><input required value={category} onChange={(event) => setCategory(event.target.value)} placeholder="Épicerie" /></div>
       </div>
       <div className="form-row">
-        <div className="form-field"><label>Prix de vente (FCFA)</label><input required type="number" min="0" value={unitPrice} onChange={(event) => setUnitPrice(event.target.value)} /></div>
-        <div className="form-field"><label>Prix d’achat (FCFA)</label><input required type="number" min="0" value={costPrice} onChange={(event) => setCostPrice(event.target.value)} /></div>
+        <div className="form-field"><label>Prix de vente (GNF)</label><input required type="number" min="0" value={unitPrice} onChange={(event) => setUnitPrice(event.target.value)} /></div>
+        <div className="form-field"><label>Prix d’achat (GNF)</label><input required type="number" min="0" value={costPrice} onChange={(event) => setCostPrice(event.target.value)} /></div>
       </div>
       <div className="form-row">
         <div className="form-field"><label>Seuil d’alerte</label><input required type="number" min="0" value={reorderThreshold} onChange={(event) => setReorderThreshold(event.target.value)} /></div>

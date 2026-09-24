@@ -123,7 +123,7 @@ function RecordPaymentForm({ client, storeOptions, onCreated }: { client: Client
       {error && <p className="form-error">{error}</p>}
       <p className="section-subtitle">Créance en cours : <strong>{client.outstanding}</strong></p>
       <div className="form-row">
-        <div className="form-field"><label>Montant encaissé (FCFA)</label><input required type="number" min="1" value={amount} onChange={(event) => setAmount(event.target.value)} /></div>
+        <div className="form-field"><label>Montant encaissé (GNF)</label><input required type="number" min="1" value={amount} onChange={(event) => setAmount(event.target.value)} /></div>
         <div className="form-field">
           <label>Méthode</label>
           <select value={method} onChange={(event) => setMethod(event.target.value as typeof method)}>
