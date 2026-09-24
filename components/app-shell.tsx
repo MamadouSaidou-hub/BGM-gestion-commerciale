@@ -5,7 +5,6 @@ import { usePathname, useRouter } from 'next/navigation'
 import { useState, type ReactNode } from 'react'
 import {
   ArrowLeftRight,
-  Bell,
   ChevronDown,
   CreditCard,
   Download,
@@ -25,6 +24,7 @@ import {
 } from 'lucide-react'
 import { authClient } from '@/lib/auth-client'
 import { AppearanceMenu } from '@/components/appearance-menu'
+import { NotificationMenu } from '@/components/notification-menu'
 
 const navItems = [
   { href: '/', label: 'Tableau de bord', icon: LayoutDashboard, adminOnly: false },
@@ -126,7 +126,8 @@ export function AppShell({
     <div className="app-frame">
       <aside className={`sidebar ${menuOpen ? 'sidebar-open' : ''}`}>
         <div className="brand-lockup">
-          <div className="brand-mark">B</div>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/logo-bgm.jpeg" alt="BGM" className="brand-mark" />
           <div><strong>BGM</strong><span>Barry-Gate Multi Service</span></div>
           <button className="mobile-close" onClick={() => setMenuOpen(false)} aria-label="Fermer le menu"><X /></button>
         </div>
@@ -158,7 +159,7 @@ export function AppShell({
             <AppearanceMenu variant="topbar" />
             {searchOpen && <input className="search-input" autoFocus placeholder="Rechercher..." aria-label="Rechercher" />}
             <button className="icon-button" onClick={() => setSearchOpen(!searchOpen)} aria-label="Rechercher"><Search /></button>
-            <button className="icon-button notification-button" aria-label="Notifications"><Bell /><span /></button>
+            <NotificationMenu />
             {onExport && <button className="export-button" onClick={onExport}><Download /> Exporter</button>}
           </div>
         </header>

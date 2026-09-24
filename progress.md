@@ -213,3 +213,21 @@ La facture (section 14) avait été construite entièrement en styles inline fix
 - **Durcissement défensif** : `flexWrap: 'wrap'` ajouté aux 3 cellules de boutons d'action restées en style inline (`fournisseurs-view.tsx`, `clients-view.tsx`, `utilisateurs-view.tsx`) — même précaution que partout ailleurs, pour qu'elles se réorganisent au lieu de déborder sur une carte mobile étroite.
 
 Vérifié : `tsc` propre, les 19 tests Vitest toujours verts, page facture testée en conditions réelles (classes `.invoice-*` confirmées dans le HTML rendu), les 10 pages principales toujours chargées sans erreur. Non vérifié visuellement (toujours pas d'outil de capture d'écran/navigateur disponible) — à confirmer par l'utilisateur sur un vrai téléphone.
+
+## 16. Rôle Postgres dédié + logo partout + vraies notifications (23-24/09/2026)
+
+**Base de données** : connexion migrée du rôle `postgres` (superutilisateur Supabase par défaut) vers un rôle applicatif dédié `commercial_app`, moins permissif par principe de moindre privilège. Mot de passe défini via `ALTER ROLE ... WITH PASSWORD` côté Supabase, permissions vérifiées manuellement (`has_table_privilege` sur les 15 tables métier + auth, plus usage des séquences) — toutes correctes. `.env.local` et la variable Vercel `DATABASE_URL` mis à jour en conséquence.
+
+**Logo intégré partout** :
+- Barre latérale : le bloc "B" (lettre stylisée) remplacé par le vrai logo (`components/app-shell.tsx`, classe `.brand-mark` adaptée pour une balise `<img>` au lieu d'un texte).
+- Favicon/icône d'app : `app/icon.jpeg` et `app/apple-icon.jpeg` ajoutés (convention de fichiers Next.js — génère automatiquement les balises `<link rel="icon">`/`apple-touch-icon`). Anciens fichiers placeholder (`apple-icon.png`, `icon-dark/light-32x32.png`, `icon.svg`) supprimés de `public/`, ils n'étaient référencés nulle part.
+- **Bug trouvé et corrigé en testant** : `middleware.ts` protégeait déjà tout sauf `login`/`api/auth`/`_next/*`/`favicon.ico` — mais pas `/icon.jpeg`, `/apple-icon.jpeg`, ni `/logo-bgm.jpeg` (servi depuis `public/`). Un visiteur non connecté (page de login) se serait retrouvé avec une icône d'onglet cassée, puisque la requête vers l'image était redirigée vers `/login` (307) au lieu de renvoyer l'image. Ajoutés à la liste d'exclusion du matcher.
+
+**Notifications réelles** (`lib/db/queries/notifications.ts`, `app/api/notifications/route.ts`, `components/notification-menu.tsx`) : la cloche de la barre du haut était purement décorative (juste un point orange statique, aucune donnée). Remplacée par un vrai menu déroulant qui agrège trois signaux déjà utilisés ailleurs dans l'app (pas de nouvelle table, pas de suivi lu/non-lu — calculé à la volée à chaque ouverture, rafraîchi toutes les 60s) :
+- Créances/dettes en retard ou à échéance proche (réutilise `getDueDateAlerts`, déjà utilisé pour le bandeau du tableau de bord)
+- Stock critique (même logique que le tableau de bord)
+- Transferts en cours (`in_transit`)
+
+Scopé comme partout ailleurs : un gestionnaire ne voit que les alertes de son magasin, un admin voit tout. Chaque ligne est cliquable et renvoie vers la page concernée (`/clients`, `/stock`, `/transferts`).
+
+Vérifié : `tsc` propre, les 19 tests Vitest toujours verts, `/api/notifications` testé en conditions réelles avec de vraies données (créances en retard, stock critique par magasin, transfert en cours — tout correctement remonté), favicon/logo confirmés accessibles sans authentification après le correctif du middleware, page d'accueil authentifiée toujours 200.
