@@ -7,6 +7,7 @@ import { Modal } from '@/components/modal'
 import { LoadError } from '@/components/load-error'
 import { downloadCsv } from '@/lib/download-csv'
 import { fetchJson } from '@/lib/fetch-json'
+import { businessConfig } from '@/lib/business-config'
 
 const periods = ['Aujourd’hui', '7 derniers jours', 'Ce mois-ci']
 
@@ -73,7 +74,7 @@ function NewSaleForm({
     if (item.unit === 'tonne') {
       const product = productMap.get(item.productId)
       if (!product?.sackWeightKg) return 0
-      return Math.round(((Number(item.tonnage) || 0) * 1000) / product.sackWeightKg)
+      return Math.round(((Number(item.tonnage) || 0) * businessConfig.unit.bulkConversionFactor) / product.sackWeightKg)
     }
     return Number(item.quantity) || 0
   }
@@ -173,7 +174,7 @@ function NewSaleForm({
                 </div>
               ) : (
                 <div className="form-field" style={{ marginBottom: 0 }}>
-                  <input required type="number" min="1" placeholder="Qté (sacs)" value={item.quantity} onChange={(event) => updateItem(index, { quantity: event.target.value })} />
+                  <input required type="number" min="1" placeholder={`Qté (${businessConfig.unit.basePluralLower})`} value={item.quantity} onChange={(event) => updateItem(index, { quantity: event.target.value })} />
                 </div>
               )}
               <div className="form-field" style={{ marginBottom: 0 }}><input required type="number" min="0" placeholder="Prix" value={item.unitPrice} onChange={(event) => updateItem(index, { unitPrice: event.target.value })} /></div>
@@ -186,7 +187,7 @@ function NewSaleForm({
                   name={`unit-${index}`}
                   checked={item.unit === 'sack'}
                   onChange={() => updateItem(index, { unit: 'sack', tonnage: '' })}
-                /> Sac
+                /> {businessConfig.unit.baseSingular}
               </label>
               <label style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, color: canUseTonne ? 'var(--muted)' : 'var(--muted-light, #ccc)' }}>
                 <input
@@ -195,10 +196,10 @@ function NewSaleForm({
                   disabled={!canUseTonne}
                   checked={item.unit === 'tonne'}
                   onChange={() => updateItem(index, { unit: 'tonne', quantity: '' })}
-                /> Tonne
+                /> {businessConfig.unit.bulkLabel}
               </label>
               {item.unit === 'tonne' && (
-                <span style={{ fontSize: 12, color: 'var(--muted)' }}>≈ {effectiveSacks(item)} sac(s)</span>
+                <span style={{ fontSize: 12, color: 'var(--muted)' }}>≈ {effectiveSacks(item)} {businessConfig.unit.baseSingularLower}(s)</span>
               )}
             </div>
           </div>
@@ -206,7 +207,7 @@ function NewSaleForm({
       })}
       <button type="button" className="item-add-link" onClick={addItem}><Plus size={13} /> Ajouter un article</button>
 
-      <div className="sale-total-row"><span>Total</span><span>{total.toLocaleString('fr-FR')} GNF</span></div>
+      <div className="sale-total-row"><span>Total</span><span>{total.toLocaleString('fr-FR')} {businessConfig.currency}</span></div>
 
       <div className="form-row">
         <div className="form-field">

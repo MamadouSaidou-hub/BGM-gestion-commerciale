@@ -1,5 +1,7 @@
 export const companyInfo = {
   name: 'BARRY-GATE MULTI SERVICE',
+  displayName: 'Barry-Gate Multi Service',
+  shortName: 'BGM',
   tagline: 'Commerce · Import',
   address: 'Madina Marché, Conakry, Guinée',
   phone: '629 59 09 64',

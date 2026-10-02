@@ -2,13 +2,14 @@ import { Analytics } from '@vercel/analytics/next'
 import type { Metadata, Viewport } from 'next'
 import { Inter } from 'next/font/google'
 import './globals.css'
+import { companyInfo } from '@/lib/company-info'
 
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter', display: 'swap' })
 
 export const metadata: Metadata = {
-  title: 'BGM · Tableau de bord',
+  title: `${companyInfo.shortName} · Tableau de bord`,
   description: 'Pilotez vos magasins, vos ventes et votre trésorerie depuis un seul espace.',
-  generator: 'BGM Barry-Gate Multi Service',
+  generator: `${companyInfo.shortName} ${companyInfo.displayName}`,
 }
 
 export const viewport: Viewport = {

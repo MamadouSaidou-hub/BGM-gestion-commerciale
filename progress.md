@@ -231,3 +231,21 @@ Vérifié : `tsc` propre, les 19 tests Vitest toujours verts, page facture test�
 Scopé comme partout ailleurs : un gestionnaire ne voit que les alertes de son magasin, un admin voit tout. Chaque ligne est cliquable et renvoie vers la page concernée (`/clients`, `/stock`, `/transferts`).
 
 Vérifié : `tsc` propre, les 19 tests Vitest toujours verts, `/api/notifications` testé en conditions réelles avec de vraies données (créances en retard, stock critique par magasin, transfert en cours — tout correctement remonté), favicon/logo confirmés accessibles sans authentification après le correctif du middleware, page d'accueil authentifiée toujours 200.
+
+## 17. Généralisation du code avant duplication pour un second client (24-25/09/2026)
+
+**Contexte** : un second client (vente de savon, packs) veut la même solution. Décision avec l'utilisateur : pas d'architecture multi-tenant tout de suite (trop risqué sur une base de données BGM déjà en production avec de vraies ventes) — à la place, généraliser ce qui est codé en dur pour la farine/Barry-Gate, puis **dupliquer le dépôt** par client. Si le besoin multi-tenant se confirme avec plus de clients, on y reviendra avec un vrai modèle de données partagé.
+
+**Nouveau fichier `lib/business-config.ts`** : vocabulaire d'unité (`baseSingular`/`basePlural`/`bulkLabel`/`bulkConversionFactor`) + devise, séparé de `lib/company-info.ts` (coordonnées). Pour BGM, les valeurs reproduisent exactement "Sac"/"Tonne"/1000/GNF — **aucun changement de comportement pour BGM**, c'était la contrainte n°1 vu que ce code part directement en production (même dépôt/déploiement).
+
+**`lib/company-info.ts`** : ajout de `shortName` ('BGM') et `displayName` ('Barry-Gate Multi Service', casse titre — distinct de `name` en capitales utilisé sur la facture).
+
+**Fichiers convertis pour consommer la config au lieu de texte en dur** : `components/sales-view.tsx` (toggle Sac/Tonne, placeholder, indice de conversion), `components/stock-view.tsx` (libellé poids du sac), `lib/db/mutations/sales.ts` (facteur de conversion, message d'erreur), `lib/export-report.ts` (en-têtes Excel/PDF — un second site de "GNF" en dur qui avait échappé au correctif de devise précédent), `components/discount-scale-modal.tsx` + `components/fournisseurs-view.tsx` (tout le vocabulaire "sacs" du barème de remise et des livraisons fournisseur), `components/app-shell.tsx` + `app/layout.tsx` + `app/login/page.tsx` + `components/stores-view.tsx` (branding "BGM"/"Barry-Gate").
+
+**Aucune colonne de `lib/db/schema.ts` renommée** (`sackWeightKg`, `tonnage`, `sackCount`, `thresholdSacks`, `discountPerSack`, l'enum `saleItemUnit`) — seul l'affichage devient configurable, le stockage reste identique. Évite toute migration sur les données réelles de BGM.
+
+**Bonus trouvés en route** : la page de login affichait encore l'ancienne lettre "B" à la place du vrai logo (jamais corrigé lors du passage au vrai logo plus tôt) — corrigé au passage. Le placeholder "Ex : BGM Deido" sur la page Magasins référençait un quartier de Douala (reliquat de l'époque où l'entreprise avait été incorrectement supposée basée au Cameroun) — corrigé en "Ex : BGM Madina".
+
+Vérifié : `tsc` propre, les 19 tests Vitest passent **sans aucune modification** (preuve que le refactor est strictement transparent pour BGM), vérification manuelle via `pnpm dev` + `curl` authentifié (page de login, barre latérale, titre d'onglet, page Magasins tous identiques à avant, logo correct partout).
+
+**Suite (bloquée en attente des infos du client savon)** : dupliquer le dépôt, nouveau Supabase/Vercel, renseigner `company-info.ts`/`business-config.ts` avec les valeurs savon (ex. unité "Pièce"/"Carton"), nouveau catalogue dans `seed.ts`. Voir le plan détaillé conservé pour cette tâche si besoin de le reprendre.

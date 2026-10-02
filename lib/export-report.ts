@@ -1,6 +1,8 @@
 import { jsPDF } from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import * as XLSX from 'xlsx'
+import { companyInfo } from '@/lib/company-info'
+import { businessConfig } from '@/lib/business-config'
 
 export type ReportsData = {
   totalRevenue: number
@@ -33,7 +35,7 @@ export function exportReportPdf(data: ReportsData, periodLabel: string) {
 
   doc.setFontSize(18)
   doc.setTextColor(...PRIMARY_RGB)
-  doc.text('BGM — Rapport d’activité', 14, 18)
+  doc.text(`${companyInfo.shortName} — Rapport d’activité`, 14, 18)
   doc.setFontSize(10)
   doc.setTextColor(120, 120, 120)
   doc.text(`Période : ${periodLabel}  ·  Généré le ${generatedAt}`, 14, 25)
@@ -81,7 +83,7 @@ export function exportReportPdf(data: ReportsData, periodLabel: string) {
 
   autoTable(doc, {
     startY: 24,
-    head: [['Produit', 'Quantité (sacs)', 'Chiffre d’affaires']],
+    head: [['Produit', `Quantité (${businessConfig.unit.basePluralLower})`, 'Chiffre d’affaires']],
     body: data.topProducts.map((row) => [row.name, String(row.quantity), row.formatted]),
     theme: 'striped',
     headStyles: { fillColor: PRIMARY_RGB },
@@ -130,49 +132,51 @@ export function exportReportPdf(data: ReportsData, periodLabel: string) {
     doc.text(`Page ${i} / ${pageCount}`, pageWidth - 25, doc.internal.pageSize.getHeight() - 8)
   }
 
-  doc.save(`rapport-bgm-${new Date().toISOString().slice(0, 10)}.pdf`)
+  doc.save(`rapport-${companyInfo.shortName.toLowerCase()}-${new Date().toISOString().slice(0, 10)}.pdf`)
 }
 
 export function exportReportExcel(data: ReportsData, periodLabel: string) {
   const workbook = XLSX.utils.book_new()
+  const revenueLabel = `Chiffre d’affaires (${businessConfig.currency})`
+  const amountLabel = `Montant (${businessConfig.currency})`
 
   const summarySheet = XLSX.utils.aoa_to_sheet([
-    ['Rapport d’activité BGM'],
+    [`Rapport d’activité ${companyInfo.shortName}`],
     [`Période : ${periodLabel}`],
     [`Généré le ${new Date().toLocaleString('fr-FR')}`],
     [],
     ['Indicateur', 'Valeur'],
-    ['Chiffre d’affaires (GNF)', data.totalRevenue],
-    ['Marge brute (GNF)', data.totalMargin],
+    [revenueLabel, data.totalRevenue],
+    [`Marge brute (${businessConfig.currency})`, data.totalMargin],
     ['Marge (%)', Number(data.marginPct.toFixed(1))],
     ['Nombre de ventes', data.salesCount],
-    ['Panier moyen (GNF)', Math.round(data.avgBasket)],
-    ['Sacs reçus (fournisseurs)', data.supplierSummary.totalSacks],
+    [`Panier moyen (${businessConfig.currency})`, Math.round(data.avgBasket)],
+    [`${businessConfig.unit.basePlural} reçus (fournisseurs)`, data.supplierSummary.totalSacks],
     ['Livraisons fournisseurs', data.supplierSummary.deliveriesCount],
-    ['Payé aux fournisseurs (GNF)', data.supplierSummary.totalPaid],
+    [`Payé aux fournisseurs (${businessConfig.currency})`, data.supplierSummary.totalPaid],
   ])
   XLSX.utils.book_append_sheet(workbook, summarySheet, 'Résumé')
 
-  const trendSheet = XLSX.utils.json_to_sheet(data.salesTrend.map((row) => ({ Période: row.label, 'Chiffre d’affaires (GNF)': row.value })))
+  const trendSheet = XLSX.utils.json_to_sheet(data.salesTrend.map((row) => ({ Période: row.label, [revenueLabel]: row.value })))
   XLSX.utils.book_append_sheet(workbook, trendSheet, 'Évolution ventes')
 
-  const storeSheet = XLSX.utils.json_to_sheet(data.storeRevenue.map((row) => ({ Magasin: row.name, 'Montant (GNF)': row.amount })))
+  const storeSheet = XLSX.utils.json_to_sheet(data.storeRevenue.map((row) => ({ Magasin: row.name, [amountLabel]: row.amount })))
   XLSX.utils.book_append_sheet(workbook, storeSheet, 'Par magasin')
 
   const paymentSheet = XLSX.utils.json_to_sheet(
-    data.paymentBreakdown.map((row) => ({ Statut: row.label, 'Nb ventes': row.count, 'Montant (GNF)': row.amount })),
+    data.paymentBreakdown.map((row) => ({ Statut: row.label, 'Nb ventes': row.count, [amountLabel]: row.amount })),
   )
   XLSX.utils.book_append_sheet(workbook, paymentSheet, 'Statuts paiement')
 
   const productsSheet = XLSX.utils.json_to_sheet(
-    data.topProducts.map((row) => ({ Produit: row.name, 'Quantité (sacs)': row.quantity, 'Chiffre d’affaires (GNF)': row.revenue })),
+    data.topProducts.map((row) => ({ Produit: row.name, [`Quantité (${businessConfig.unit.basePluralLower})`]: row.quantity, [revenueLabel]: row.revenue })),
   )
   XLSX.utils.book_append_sheet(workbook, productsSheet, 'Top produits')
 
   const clientsSheet = XLSX.utils.json_to_sheet(
-    data.topClients.map((row) => ({ Client: row.name, 'Nb ventes': row.salesCount, 'Chiffre d’affaires (GNF)': row.revenue })),
+    data.topClients.map((row) => ({ Client: row.name, 'Nb ventes': row.salesCount, [revenueLabel]: row.revenue })),
   )
   XLSX.utils.book_append_sheet(workbook, clientsSheet, 'Top clients')
 
-  XLSX.writeFile(workbook, `rapport-bgm-${new Date().toISOString().slice(0, 10)}.xlsx`)
+  XLSX.writeFile(workbook, `rapport-${companyInfo.shortName.toLowerCase()}-${new Date().toISOString().slice(0, 10)}.xlsx`)
 }

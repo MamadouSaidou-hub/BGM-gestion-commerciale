@@ -6,6 +6,7 @@ import { AppShell } from '@/components/app-shell'
 import { Modal } from '@/components/modal'
 import { LoadError } from '@/components/load-error'
 import { fetchJson } from '@/lib/fetch-json'
+import { companyInfo } from '@/lib/company-info'
 
 type StoreRow = {
   id: number
@@ -49,7 +50,7 @@ function NewStoreForm({ onCreated }: { onCreated: () => void }) {
   return (
     <form onSubmit={handleSubmit}>
       {error && <p className="form-error">{error}</p>}
-      <div className="form-field"><label>Nom du magasin</label><input required value={name} onChange={(event) => setName(event.target.value)} placeholder="Ex : BGM Deido" /></div>
+      <div className="form-field"><label>Nom du magasin</label><input required value={name} onChange={(event) => setName(event.target.value)} placeholder={`Ex : ${companyInfo.shortName} Madina`} /></div>
       <div className="form-field"><label>Ville</label><input required value={city} onChange={(event) => setCity(event.target.value)} placeholder="Douala" /></div>
       <div className="form-actions"><button type="submit" className="btn-primary" disabled={submitting}>{submitting ? 'Création...' : 'Créer le magasin'}</button></div>
     </form>
@@ -72,7 +73,7 @@ export function StoresView() {
   return (
     <AppShell breadcrumb="Gestion" section="Magasins">
       <section className="page-heading">
-        <div><p className="eyebrow">RÉSEAU</p><h1>Magasins <span>BGM</span></h1><p className="heading-subtitle">Performance du mois en cours pour chaque point de vente.</p></div>
+        <div><p className="eyebrow">RÉSEAU</p><h1>Magasins <span>{companyInfo.shortName}</span></h1><p className="heading-subtitle">Performance du mois en cours pour chaque point de vente.</p></div>
         <div className="filter-row">
           <button className="btn-primary" onClick={() => setModalOpen(true)}><Plus size={14} /> Nouveau magasin</button>
         </div>
@@ -98,7 +99,7 @@ export function StoresView() {
         {stores !== null && stores.length === 0 && <p className="table-empty">Aucun magasin enregistré.</p>}
       </div>
 
-      <Modal open={modalOpen} onClose={() => setModalOpen(false)} title="Nouveau magasin" subtitle="Ajoutez un point de vente au réseau BGM.">
+      <Modal open={modalOpen} onClose={() => setModalOpen(false)} title="Nouveau magasin" subtitle={`Ajoutez un point de vente au réseau ${companyInfo.shortName}.`}>
         <NewStoreForm onCreated={() => { setModalOpen(false); setRefreshKey((key) => key + 1) }} />
       </Modal>
     </AppShell>

@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { authClient } from '@/lib/auth-client'
+import { companyInfo } from '@/lib/company-info'
 
 export default function LoginPage() {
   const router = useRouter()
@@ -32,10 +33,11 @@ export default function LoginPage() {
     <div style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', background: 'var(--background)' }}>
       <div className="modal-panel" style={{ width: '100%', maxWidth: 360 }}>
         <div className="brand-lockup" style={{ paddingBottom: 18 }}>
-          <div className="brand-mark">B</div>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={companyInfo.logoPath} alt={companyInfo.shortName} className="brand-mark" />
           <div>
-            <strong>BGM</strong>
-            <span>Barry-Gate Multi Service</span>
+            <strong>{companyInfo.shortName}</strong>
+            <span>{companyInfo.displayName}</span>
           </div>
         </div>
         <form onSubmit={handleSubmit}>

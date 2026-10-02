@@ -25,6 +25,7 @@ import {
 import { authClient } from '@/lib/auth-client'
 import { AppearanceMenu } from '@/components/appearance-menu'
 import { NotificationMenu } from '@/components/notification-menu'
+import { companyInfo } from '@/lib/company-info'
 
 const navItems = [
   { href: '/', label: 'Tableau de bord', icon: LayoutDashboard, adminOnly: false },
@@ -127,8 +128,8 @@ export function AppShell({
       <aside className={`sidebar ${menuOpen ? 'sidebar-open' : ''}`}>
         <div className="brand-lockup">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/logo-bgm.jpeg" alt="BGM" className="brand-mark" />
-          <div><strong>BGM</strong><span>Barry-Gate Multi Service</span></div>
+          <img src={companyInfo.logoPath} alt={companyInfo.shortName} className="brand-mark" />
+          <div><strong>{companyInfo.shortName}</strong><span>{companyInfo.displayName}</span></div>
           <button className="mobile-close" onClick={() => setMenuOpen(false)} aria-label="Fermer le menu"><X /></button>
         </div>
         <div className="workspace-select"><span className="workspace-dot" /><span>Direction générale</span><ChevronDown aria-hidden="true" /></div>

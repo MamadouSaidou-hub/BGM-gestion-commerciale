@@ -2,6 +2,7 @@ import { and, eq, sql } from 'drizzle-orm'
 import { db } from '../client'
 import { payments, products, receivables, saleItems, sales, stockLevels, stockMovements } from '../schema'
 import { getQuantity } from './shared'
+import { businessConfig } from '@/lib/business-config'
 
 export async function createSale(input: {
   storeId: number
@@ -23,10 +24,12 @@ export async function createSale(input: {
       if (item.unit === 'tonne') {
         const product = productMap.get(item.productId)
         if (!product?.sackWeightKg) {
-          throw new Error('Ce produit n\'a pas de poids de sac configuré, vente en tonnes impossible.')
+          throw new Error(
+            `Ce produit n'a pas de poids de ${businessConfig.unit.baseSingularLower} configuré, vente en ${businessConfig.unit.bulkLabel.toLowerCase()}s impossible.`,
+          )
         }
         const tonnage = item.tonnage ?? 0
-        const quantity = Math.round((tonnage * 1000) / product.sackWeightKg)
+        const quantity = Math.round((tonnage * businessConfig.unit.bulkConversionFactor) / product.sackWeightKg)
         return { ...item, quantity, unit: 'tonne' as const, tonnage }
       }
       return { ...item, unit: 'sack' as const, tonnage: null }

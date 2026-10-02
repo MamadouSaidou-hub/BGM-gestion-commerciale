@@ -8,6 +8,7 @@ import { DiscountScaleModal } from '@/components/discount-scale-modal'
 import { LoadError } from '@/components/load-error'
 import { downloadCsv } from '@/lib/download-csv'
 import { fetchJson } from '@/lib/fetch-json'
+import { businessConfig } from '@/lib/business-config'
 
 type Supplier = {
   id: number
@@ -156,7 +157,7 @@ function RecordDeliveryForm({
         </div>
       </div>
       <div className="form-row">
-        <div className="form-field"><label>Nombre de sacs</label><input required type="number" min="1" value={sackCount} onChange={(event) => setSackCount(event.target.value)} /></div>
+        <div className="form-field"><label>Nombre de {businessConfig.unit.basePluralLower}</label><input required type="number" min="1" value={sackCount} onChange={(event) => setSackCount(event.target.value)} /></div>
         <div className="form-field"><label>Tonnage (optionnel)</label><input type="number" min="0" step="0.01" value={tonnage} onChange={(event) => setTonnage(event.target.value)} placeholder="Pour info uniquement" /></div>
       </div>
       <div className="form-field"><label>Référence bon de livraison (optionnel)</label><input value={reference} onChange={(event) => setReference(event.target.value)} placeholder="Ex : plaque du camion" /></div>
@@ -293,7 +294,7 @@ export function FournisseursView() {
               <tr>
                 <th>Fournisseur</th>
                 <th>Téléphone</th>
-                <th>Sacs ce mois</th>
+                <th>{businessConfig.unit.basePlural} ce mois</th>
                 <th>Payé au total</th>
                 <th>Dû</th>
                 <th>Statut</th>
@@ -305,7 +306,7 @@ export function FournisseursView() {
                 <tr key={supplier.id}>
                   <td data-label="Fournisseur"><span style={{ display: 'flex', alignItems: 'center', gap: 8 }}><Truck size={13} color="var(--faint)" />{supplier.name}</span></td>
                   <td data-label="Téléphone">{supplier.phone}</td>
-                  <td data-label="Sacs ce mois">{supplier.sacksThisMonth}</td>
+                  <td data-label={`${businessConfig.unit.basePlural} ce mois`}>{supplier.sacksThisMonth}</td>
                   <td data-label="Payé">{supplier.totalPaid}</td>
                   <td data-label="Dû">{supplier.owed}</td>
                   <td data-label="Statut"><span className={`badge ${statusBadge[supplier.status]}`}>{statusLabel[supplier.status]}</span></td>
@@ -327,7 +328,7 @@ export function FournisseursView() {
       <Modal open={supplierModalOpen} onClose={() => setSupplierModalOpen(false)} title="Nouveau fournisseur" subtitle="Ajoutez un fournisseur.">
         <NewSupplierForm onCreated={() => { setSupplierModalOpen(false); setRefreshKey((key) => key + 1) }} />
       </Modal>
-      <Modal open={deliverySupplier !== null} onClose={() => setDeliverySupplier(null)} title={`Nouvelle livraison — ${deliverySupplier?.name ?? ''}`} subtitle="Enregistrez une réception de sacs et mettez à jour le stock." wide>
+      <Modal open={deliverySupplier !== null} onClose={() => setDeliverySupplier(null)} title={`Nouvelle livraison — ${deliverySupplier?.name ?? ''}`} subtitle={`Enregistrez une réception de ${businessConfig.unit.basePluralLower} et mettez à jour le stock.`} wide>
         {deliverySupplier && (
           <RecordDeliveryForm
             supplier={deliverySupplier}
