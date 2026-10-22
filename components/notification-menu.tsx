@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { Bell } from 'lucide-react'
 
@@ -22,6 +22,16 @@ export function NotificationMenu() {
   const [open, setOpen] = useState(false)
   const [items, setItems] = useState<NotificationItem[]>([])
   const [loading, setLoading] = useState(true)
+  const containerRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!open) return
+    function handleClickOutside(event: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(event.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [open])
 
   useEffect(() => {
     let cancelled = false
@@ -45,7 +55,7 @@ export function NotificationMenu() {
   }, [])
 
   return (
-    <div style={{ position: 'relative' }}>
+    <div ref={containerRef} style={{ position: 'relative' }}>
       <button type="button" className="icon-button notification-button" onClick={() => setOpen((value) => !value)} aria-label={`Notifications${items.length ? ` (${items.length})` : ''}`}>
         <Bell />
         {items.length > 0 && <span />}

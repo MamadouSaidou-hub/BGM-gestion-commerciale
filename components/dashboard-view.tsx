@@ -5,7 +5,6 @@ import {
   AlertTriangle,
   ArrowDownRight,
   ArrowUpRight,
-  Clock,
   ChevronDown,
   CreditCard,
   Package,
@@ -98,26 +97,6 @@ export function DashboardView() {
       </section>
 
       {error && <LoadError message={error} onRetry={() => setRefreshKey((key) => key + 1)} />}
-
-      {data && (data.dueAlerts.overdue.length > 0 || data.dueAlerts.upcoming.length > 0) && (
-        <section className="due-banner" aria-label="Échéances">
-          {data.dueAlerts.overdue.slice(0, 5).map((alert, index) => (
-            <div className="due-banner-row due-banner-overdue" key={`overdue-${index}`}>
-              <AlertTriangle size={14} />
-              <span><strong>{alert.name}</strong> ({alert.kind === 'client' ? 'client' : 'fournisseur'}) — {alert.amount} en retard de {Math.abs(alert.daysUntilDue)} jour{Math.abs(alert.daysUntilDue) > 1 ? 's' : ''}</span>
-            </div>
-          ))}
-          {data.dueAlerts.upcoming.slice(0, 5).map((alert, index) => (
-            <div className="due-banner-row due-banner-upcoming" key={`upcoming-${index}`}>
-              <Clock size={14} />
-              <span><strong>{alert.name}</strong> ({alert.kind === 'client' ? 'client' : 'fournisseur'}) — {alert.amount} échéance dans {alert.daysUntilDue === 0 ? "aujourd’hui" : `${alert.daysUntilDue} jour${alert.daysUntilDue > 1 ? 's' : ''}`}</span>
-            </div>
-          ))}
-          {(data.dueAlerts.overdue.length > 5 || data.dueAlerts.upcoming.length > 5) && (
-            <div className="due-banner-more">+ {Math.max(0, data.dueAlerts.overdue.length - 5) + Math.max(0, data.dueAlerts.upcoming.length - 5)} autre(s) échéance(s)</div>
-          )}
-        </section>
-      )}
 
       <section className="metrics-grid" aria-label="Indicateurs clés">
         <MetricCard label="Chiffre d’affaires" value={data?.metrics.revenue.value ?? '—'} helper={data?.metrics.revenue.helper ?? ''} trend={data?.metrics.revenue.trend ?? ''} icon={WalletCards} tone="navy" />
