@@ -10,12 +10,20 @@ export const metadata: Metadata = {
   title: `${companyInfo.shortName} · Tableau de bord`,
   description: 'Pilotez vos magasins, vos ventes et votre trésorerie depuis un seul espace.',
   generator: `${companyInfo.shortName} ${companyInfo.displayName}`,
+  manifest: '/manifest.webmanifest',
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'default',
+    title: companyInfo.shortName,
+  },
+  formatDetection: { telephone: false },
 }
 
 export const viewport: Viewport = {
   colorScheme: 'light dark',
   themeColor: '#f7f9fc',
   userScalable: true,
+  viewportFit: 'cover',
 }
 
 // Runs before paint to avoid a flash of the wrong theme/accent color.
