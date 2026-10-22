@@ -15,7 +15,7 @@ export type ReportsData = {
   avgBasketFormatted: string
   salesTrend: { label: string; value: number }[]
   storeRevenue: { name: string; amount: number; formatted: string }[]
-  topProducts: { name: string; quantity: number; revenue: number; formatted: string }[]
+  topProducts: { name: string; quantity: number; revenue: number; formatted: string; margin: number; marginFormatted: string }[]
   topClients: { name: string; revenue: number; salesCount: number; formatted: string }[]
   paymentBreakdown: { status: string; label: string; count: number; amount: number; formatted: string }[]
   supplierSummary: { totalSacks: number; deliveriesCount: number; totalPaid: number; totalPaidFormatted: string }
@@ -83,8 +83,8 @@ export function exportReportPdf(data: ReportsData, periodLabel: string) {
 
   autoTable(doc, {
     startY: 24,
-    head: [['Produit', `Quantité (${businessConfig.unit.basePluralLower})`, 'Chiffre d’affaires']],
-    body: data.topProducts.map((row) => [row.name, String(row.quantity), row.formatted]),
+    head: [['Produit', `Quantité (${businessConfig.unit.basePluralLower})`, 'Chiffre d’affaires', 'Marge']],
+    body: data.topProducts.map((row) => [row.name, String(row.quantity), row.formatted, row.marginFormatted]),
     theme: 'striped',
     headStyles: { fillColor: PRIMARY_RGB },
     margin: { left: 14, right: 14 },
@@ -169,7 +169,12 @@ export function exportReportExcel(data: ReportsData, periodLabel: string) {
   XLSX.utils.book_append_sheet(workbook, paymentSheet, 'Statuts paiement')
 
   const productsSheet = XLSX.utils.json_to_sheet(
-    data.topProducts.map((row) => ({ Produit: row.name, [`Quantité (${businessConfig.unit.basePluralLower})`]: row.quantity, [revenueLabel]: row.revenue })),
+    data.topProducts.map((row) => ({
+      Produit: row.name,
+      [`Quantité (${businessConfig.unit.basePluralLower})`]: row.quantity,
+      [revenueLabel]: row.revenue,
+      [`Marge (${businessConfig.currency})`]: row.margin,
+    })),
   )
   XLSX.utils.book_append_sheet(workbook, productsSheet, 'Top produits')
 

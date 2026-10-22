@@ -56,6 +56,7 @@ export async function getReportsOverview(period: PeriodKey) {
         productName: products.name,
         quantity: sql<number>`sum(${saleItems.quantity})`.mapWith(Number),
         revenue: sql<number>`sum(${saleItems.quantity} * ${saleItems.unitPrice})`.mapWith(Number),
+        cost: sql<number>`sum(${saleItems.quantity} * ${products.costPrice})`.mapWith(Number),
       })
       .from(saleItems)
       .innerJoin(products, eq(saleItems.productId, products.id))
@@ -135,7 +136,17 @@ export async function getReportsOverview(period: PeriodKey) {
     avgBasketFormatted: formatFcfa(avgBasket),
     salesTrend: salesTrendRows,
     storeRevenue: storeRevenueRows.map((row) => ({ name: row.storeName, amount: row.total, formatted: formatFcfa(row.total) })),
-    topProducts: itemRows.map((row) => ({ name: row.productName, quantity: row.quantity, revenue: row.revenue, formatted: formatFcfa(row.revenue) })),
+    topProducts: itemRows.map((row) => {
+      const productMargin = row.revenue - row.cost
+      return {
+        name: row.productName,
+        quantity: row.quantity,
+        revenue: row.revenue,
+        formatted: formatFcfa(row.revenue),
+        margin: productMargin,
+        marginFormatted: formatFcfa(productMargin),
+      }
+    }),
     topClients: clientRevenueRows.map((row) => ({ name: row.clientName, revenue: row.revenue, salesCount: row.salesCount, formatted: formatFcfa(row.revenue) })),
     paymentBreakdown: paymentStatusRows.map((row) => ({
       status: row.status,

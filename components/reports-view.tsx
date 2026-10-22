@@ -23,13 +23,13 @@ function MetricCard({ label, value, icon: Icon, tone }: { label: string; value: 
   )
 }
 
-function RankBar({ label, value, formatted, max, color }: { label: string; value: number; formatted: string; max: number; color: string }) {
+function RankBar({ label, value, formatted, max, color, sub }: { label: string; value: number; formatted: string; max: number; color: string; sub?: string }) {
   const pct = max > 0 ? Math.max((value / max) * 100, 2) : 0
   return (
     <div className="rank-bar-row">
       <span className="rank-bar-label" title={label}>{label}</span>
       <div className="rank-bar-track"><div className="rank-bar-fill" style={{ width: `${pct}%`, background: color }} /></div>
-      <span className="rank-bar-value">{formatted}</span>
+      <span className="rank-bar-value">{formatted}{sub && <span style={{ display: 'block', fontSize: 10, color: 'var(--faint)', fontWeight: 400 }}>{sub}</span>}</span>
     </div>
   )
 }
@@ -150,10 +150,10 @@ export function ReportsView() {
 
       <section className="dashboard-grid">
         <article className="panel">
-          <div className="panel-header"><div><h2 className="section-title">Top produits vendus</h2><p className="section-subtitle">Par chiffre d’affaires généré</p></div><TrendingUp size={16} color="var(--faint)" /></div>
+          <div className="panel-header"><div><h2 className="section-title">Top produits vendus</h2><p className="section-subtitle">Par chiffre d’affaires généré · marge en dessous</p></div><TrendingUp size={16} color="var(--faint)" /></div>
           <div>
             {(data?.topProducts ?? []).map((row) => (
-              <RankBar key={row.name} label={row.name} value={row.revenue} formatted={row.formatted} max={maxProduct} color="var(--primary)" />
+              <RankBar key={row.name} label={row.name} value={row.revenue} formatted={row.formatted} max={maxProduct} color="var(--primary)" sub={`Marge : ${row.marginFormatted}`} />
             ))}
             {!loading && (data?.topProducts.length ?? 0) === 0 && <p className="table-empty">Aucune donnée disponible.</p>}
           </div>

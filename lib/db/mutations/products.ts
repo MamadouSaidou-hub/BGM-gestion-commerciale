@@ -49,6 +49,14 @@ export async function createProduct(input: {
   return product
 }
 
+export async function updateProduct(
+  id: number,
+  input: { unitPrice?: number; costPrice?: number; reorderThreshold?: number },
+) {
+  const [product] = await db.update(products).set(input).where(eq(products.id, id)).returning()
+  return product
+}
+
 export async function addStockReception(input: { productId: number; storeId: number; quantity: number; reference?: string }) {
   const currentQuantity = await getQuantity(db, input.productId, input.storeId)
 

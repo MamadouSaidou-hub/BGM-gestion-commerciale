@@ -10,6 +10,7 @@ import { LoadError } from '@/components/load-error'
 import { businessConfig } from '@/lib/business-config'
 
 type StockItem = {
+  productId: number
   name: string
   sku: string
   category: string
@@ -17,6 +18,8 @@ type StockItem = {
   quantity: number
   threshold: number
   unitPrice: string
+  unitPriceRaw: number
+  costPriceRaw: number
   status: 'critical' | 'low' | 'ok'
 }
 
@@ -110,6 +113,49 @@ function NewProductForm({ storeOptions, onCreated }: { storeOptions: StoreOption
         </select>
       </div>
       <div className="form-actions"><button type="submit" className="btn-primary" disabled={submitting}>{submitting ? 'Création...' : 'Créer l’article'}</button></div>
+    </form>
+  )
+}
+
+function EditPriceForm({ item, onSaved }: { item: StockItem; onSaved: () => void }) {
+  const [unitPrice, setUnitPrice] = useState(String(item.unitPriceRaw))
+  const [costPrice, setCostPrice] = useState(String(item.costPriceRaw))
+  const [error, setError] = useState('')
+  const [submitting, setSubmitting] = useState(false)
+
+  async function handleSubmit(event: React.FormEvent) {
+    event.preventDefault()
+    setError('')
+    setSubmitting(true)
+    try {
+      const res = await fetch(`/api/products/${item.productId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ unitPrice, costPrice }),
+      })
+      const json = await res.json()
+      if (!res.ok) {
+        setError(json.error ?? 'Une erreur est survenue.')
+        return
+      }
+      onSaved()
+    } catch {
+      setError('Connexion instable — impossible de contacter le serveur. Réessayez.')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  return (
+    <form onSubmit={handleSubmit}>
+      {error && <p className="form-error">{error}</p>}
+      <p className="section-subtitle">{item.name} ({item.sku})</p>
+      <div className="form-row">
+        <div className="form-field"><label>Prix de vente (GNF)</label><input required type="number" min="0" value={unitPrice} onChange={(event) => setUnitPrice(event.target.value)} /></div>
+        <div className="form-field"><label>Prix de revient (GNF)</label><input required type="number" min="0" value={costPrice} onChange={(event) => setCostPrice(event.target.value)} /></div>
+      </div>
+      <p className="section-subtitle">Le nouveau prix de revient s’applique aux prochaines ventes. Les ventes déjà enregistrées gardent leur marge d’origine.</p>
+      <div className="form-actions"><button type="submit" className="btn-primary" disabled={submitting}>{submitting ? 'Enregistrement...' : 'Enregistrer'}</button></div>
     </form>
   )
 }
@@ -260,6 +306,7 @@ export function StockView() {
   const [productModalOpen, setProductModalOpen] = useState(false)
   const [receptionModalOpen, setReceptionModalOpen] = useState(false)
   const [countModalOpen, setCountModalOpen] = useState(false)
+  const [editItem, setEditItem] = useState<StockItem | null>(null)
   const [counts, setCounts] = useState<StockCountRow[]>([])
   const [refreshKey, setRefreshKey] = useState(0)
 
@@ -307,6 +354,7 @@ export function StockView() {
     setProductModalOpen(false)
     setReceptionModalOpen(false)
     setCountModalOpen(false)
+    setEditItem(null)
     setRefreshKey((key) => key + 1)
   }
 
@@ -351,6 +399,7 @@ export function StockView() {
                 <th>Seuil</th>
                 <th>Prix unitaire</th>
                 <th>Statut</th>
+                <th></th>
               </tr>
             </thead>
             <tbody>
@@ -364,6 +413,7 @@ export function StockView() {
                   <td data-label="Seuil">{item.threshold}</td>
                   <td data-label="Prix unitaire">{item.unitPrice}</td>
                   <td data-label="Statut"><span className={`badge ${statusBadge[item.status]}`}>{statusLabel[item.status]}</span></td>
+                  <td data-label="Action"><button className="btn-ghost" onClick={() => setEditItem(item)}>Prix</button></td>
                 </tr>
               ))}
             </tbody>
@@ -413,6 +463,9 @@ export function StockView() {
       </Modal>
       <Modal open={receptionModalOpen} onClose={() => setReceptionModalOpen(false)} title="Réception stock" subtitle="Enregistrez l’arrivée d’articles dans un magasin.">
         <StockReceptionForm storeOptions={storeOptions} productOptions={productOptions} onCreated={refresh} />
+      </Modal>
+      <Modal open={editItem !== null} onClose={() => setEditItem(null)} title="Modifier les prix" subtitle="Ajustez le prix de vente et le prix de revient de l’article.">
+        {editItem && <EditPriceForm item={editItem} onSaved={refresh} />}
       </Modal>
     </AppShell>
   )

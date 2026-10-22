@@ -9,10 +9,12 @@ export async function getStockOverview(storeName: string | null) {
 
   const rows = await db
     .select({
+      productId: products.id,
       name: products.name,
       sku: products.sku,
       category: products.category,
       unitPrice: products.unitPrice,
+      costPrice: products.costPrice,
       threshold: products.reorderThreshold,
       quantity: stockLevels.quantity,
       storeName: stores.name,
@@ -26,6 +28,7 @@ export async function getStockOverview(storeName: string | null) {
   const items = rows.map((row) => {
     const status: 'critical' | 'low' | 'ok' = row.quantity <= row.threshold / 2 ? 'critical' : row.quantity <= row.threshold ? 'low' : 'ok'
     return {
+      productId: row.productId,
       name: row.name,
       sku: row.sku,
       category: row.category,
@@ -33,6 +36,8 @@ export async function getStockOverview(storeName: string | null) {
       quantity: row.quantity,
       threshold: row.threshold,
       unitPrice: formatFcfa(row.unitPrice),
+      unitPriceRaw: row.unitPrice,
+      costPriceRaw: row.costPrice,
       status,
     }
   })

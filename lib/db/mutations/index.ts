@@ -1,6 +1,6 @@
 export { createStore } from './stores'
 export { createClient } from './clients'
-export { createProduct, addStockReception } from './products'
+export { createProduct, addStockReception, updateProduct } from './products'
 export { createSale } from './sales'
 export { recordPayment, recordSupplierPayment } from './payments'
 export { createTransfer, receiveTransfer } from './transfers'
