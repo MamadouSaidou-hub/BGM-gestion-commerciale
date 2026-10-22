@@ -5,6 +5,7 @@ import { usePathname, useRouter } from 'next/navigation'
 import { useState, type ReactNode } from 'react'
 import {
   ArrowLeftRight,
+  Banknote,
   ChevronDown,
   CreditCard,
   Download,
@@ -39,6 +40,7 @@ const gestionItems = [
   { href: '/magasins', label: 'Magasins', icon: Store, adminOnly: true },
   { href: '/clients', label: 'Clients & créances', icon: Users, adminOnly: false },
   { href: '/fournisseurs', label: 'Fournisseurs', icon: Truck, adminOnly: true },
+  { href: '/caisse', label: 'Caisse & Dépenses', icon: Banknote, adminOnly: true },
   { href: '/rapports', label: 'Rapports', icon: ReceiptText, adminOnly: true },
   { href: '/utilisateurs', label: 'Utilisateurs', icon: UserCog, adminOnly: true },
 ]

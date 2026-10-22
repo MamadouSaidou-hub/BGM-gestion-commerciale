@@ -305,6 +305,46 @@ export const supplierPayments = pgTable(
   (table) => [index('supplier_payments_supplier_id_idx').on(table.supplierId), index('supplier_payments_created_at_idx').on(table.createdAt)],
 )
 
+export const cashAccountType = ['cash', 'bank', 'mobile_money', 'other'] as const
+
+export const cashAccounts = pgTable(
+  'cash_accounts',
+  {
+    id: serial('id').primaryKey(),
+    name: text('name').notNull(),
+    type: text('type', { enum: cashAccountType }).notNull().default('cash'),
+    balance: doublePrecision('balance').notNull().default(0),
+    // Optionnel — sert juste à étiqueter/filtrer une caisse par magasin, pas à restreindre l'accès
+    // (la page Caisse & Dépenses est réservée aux admins, qui voient toutes les caisses).
+    storeId: integer('store_id').references(() => stores.id, { onDelete: 'set null' }),
+    ...timestamps,
+  },
+  (table) => [index('cash_accounts_store_id_idx').on(table.storeId)],
+)
+
+export const cashMovementType = ['expense', 'deposit'] as const
+
+export const cashMovements = pgTable(
+  'cash_movements',
+  {
+    id: serial('id').primaryKey(),
+    // restrict, pas cascade : on ne veut jamais perdre l'historique financier en supprimant une caisse.
+    cashAccountId: integer('cash_account_id')
+      .notNull()
+      .references(() => cashAccounts.id, { onDelete: 'restrict' }),
+    storeId: integer('store_id').references(() => stores.id, { onDelete: 'set null' }),
+    type: text('type', { enum: cashMovementType }).notNull(),
+    // Texte libre (comme products.category) plutôt qu'un enum fermé — les catégories de dépenses
+    // varient trop d'une entreprise à l'autre pour être figées dans le schéma.
+    category: text('category').notNull(),
+    description: text('description'),
+    // Toujours positif — le sens (crédit/débit) est porté par `type`, pas par le signe.
+    amount: doublePrecision('amount').notNull(),
+    ...timestamps,
+  },
+  (table) => [index('cash_movements_account_id_idx').on(table.cashAccountId), index('cash_movements_created_at_idx').on(table.createdAt)],
+)
+
 export const discountPartyType = ['supplier', 'client'] as const
 
 export const discountScales = pgTable(
