@@ -22,7 +22,7 @@ export async function GET(request: NextRequest) {
         { key: 'date', label: 'Date' },
         { key: 'account', label: 'Caisse' },
         { key: 'type', label: 'Type' },
-        { key: 'category', label: 'Catégorie' },
+        { key: 'category', label: 'Motif' },
         { key: 'description', label: 'Description' },
         { key: 'amountFormatted', label: 'Montant' },
       ],

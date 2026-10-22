@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Banknote, ChevronDown, Landmark, Plus, Smartphone, TrendingDown, TrendingUp, Wallet } from 'lucide-react'
+import { ArrowDownCircle, ArrowUpCircle, Banknote, ChevronDown, Landmark, Plus, Smartphone, TrendingDown, TrendingUp, Wallet } from 'lucide-react'
 import { AppShell } from '@/components/app-shell'
 import { Modal } from '@/components/modal'
 import { LoadError } from '@/components/load-error'
@@ -84,9 +84,8 @@ function NewAccountForm({ onCreated }: { onCreated: () => void }) {
   )
 }
 
-function NewMovementForm({ accounts, onCreated }: { accounts: CashAccount[]; onCreated: () => void }) {
+function NewMovementForm({ type, accounts, onCreated }: { type: 'expense' | 'deposit'; accounts: CashAccount[]; onCreated: () => void }) {
   const [cashAccountId, setCashAccountId] = useState('')
-  const [type, setType] = useState<'expense' | 'deposit'>('expense')
   const [category, setCategory] = useState('')
   const [description, setDescription] = useState('')
   const [amount, setAmount] = useState('')
@@ -130,18 +129,15 @@ function NewMovementForm({ accounts, onCreated }: { accounts: CashAccount[]; onC
         </select>
       </div>
       <div className="form-row">
-        <div className="form-field">
-          <label>Type</label>
-          <select value={type} onChange={(event) => setType(event.target.value as typeof type)}>
-            <option value="expense">Dépense</option>
-            <option value="deposit">Dépôt</option>
-          </select>
-        </div>
         <div className="form-field"><label>Montant (GNF)</label><input required type="number" min="1" value={amount} onChange={(event) => setAmount(event.target.value)} /></div>
+        <div className="form-field"><label>Motif</label><input required value={category} onChange={(event) => setCategory(event.target.value)} placeholder={type === 'expense' ? 'Ex : Loyer, Salaires, Transport...' : 'Ex : Vente comptant, Apport...'} /></div>
       </div>
-      <div className="form-field"><label>Catégorie</label><input required value={category} onChange={(event) => setCategory(event.target.value)} placeholder="Ex : Loyer, Salaires, Transport..." /></div>
       <div className="form-field"><label>Description (optionnel)</label><input value={description} onChange={(event) => setDescription(event.target.value)} /></div>
-      <div className="form-actions"><button type="submit" className="btn-primary" disabled={submitting}>{submitting ? 'Enregistrement...' : 'Enregistrer le mouvement'}</button></div>
+      <div className="form-actions">
+        <button type="submit" className="btn-primary" disabled={submitting}>
+          {submitting ? 'Enregistrement...' : type === 'expense' ? 'Enregistrer la dépense' : 'Enregistrer le dépôt'}
+        </button>
+      </div>
     </form>
   )
 }
@@ -152,7 +148,8 @@ export function CaisseView() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [accountModalOpen, setAccountModalOpen] = useState(false)
-  const [movementModalOpen, setMovementModalOpen] = useState(false)
+  const [expenseModalOpen, setExpenseModalOpen] = useState(false)
+  const [depositModalOpen, setDepositModalOpen] = useState(false)
   const [refreshKey, setRefreshKey] = useState(0)
 
   useEffect(() => {
@@ -197,7 +194,8 @@ export function CaisseView() {
       <div className="toolbar-panel">
         <div className="toolbar-spacer" />
         <button className="btn-secondary" onClick={() => setAccountModalOpen(true)}><Plus size={14} /> Nouvelle caisse</button>
-        <button className="btn-primary" onClick={() => setMovementModalOpen(true)} disabled={accounts.length === 0}><Plus size={14} /> Nouveau mouvement</button>
+        <button className="btn-secondary" onClick={() => setDepositModalOpen(true)} disabled={accounts.length === 0}><ArrowUpCircle size={14} /> Nouveau dépôt</button>
+        <button className="btn-primary" onClick={() => setExpenseModalOpen(true)} disabled={accounts.length === 0}><ArrowDownCircle size={14} /> Nouvelle dépense</button>
       </div>
 
       {accounts.length > 0 && (
@@ -225,7 +223,7 @@ export function CaisseView() {
                 <th>Date</th>
                 <th>Caisse</th>
                 <th>Type</th>
-                <th>Catégorie</th>
+                <th>Motif</th>
                 <th>Montant</th>
               </tr>
             </thead>
@@ -235,7 +233,7 @@ export function CaisseView() {
                   <td data-label="Date">{new Date(movement.date).toLocaleString('fr-FR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}</td>
                   <td data-label="Caisse">{movement.account}</td>
                   <td data-label="Type"><span className={`badge ${movement.type === 'deposit' ? 'badge-green' : 'badge-orange'}`}>{movementTypeLabel[movement.type]}</span></td>
-                  <td data-label="Catégorie">{movement.category}</td>
+                  <td data-label="Motif">{movement.category}</td>
                   <td data-label="Montant">{movement.amountFormatted}</td>
                 </tr>
               ))}
@@ -249,8 +247,12 @@ export function CaisseView() {
         <NewAccountForm onCreated={() => { setAccountModalOpen(false); setRefreshKey((key) => key + 1) }} />
       </Modal>
 
-      <Modal open={movementModalOpen} onClose={() => setMovementModalOpen(false)} title="Nouveau mouvement" subtitle="Enregistrez une dépense ou un dépôt.">
-        <NewMovementForm accounts={accounts} onCreated={() => { setMovementModalOpen(false); setRefreshKey((key) => key + 1) }} />
+      <Modal open={expenseModalOpen} onClose={() => setExpenseModalOpen(false)} title="Nouvelle dépense" subtitle="Choisissez la caisse, le montant et le motif.">
+        <NewMovementForm type="expense" accounts={accounts} onCreated={() => { setExpenseModalOpen(false); setRefreshKey((key) => key + 1) }} />
+      </Modal>
+
+      <Modal open={depositModalOpen} onClose={() => setDepositModalOpen(false)} title="Nouveau dépôt" subtitle="Ajoutez de l’argent dans une caisse.">
+        <NewMovementForm type="deposit" accounts={accounts} onCreated={() => { setDepositModalOpen(false); setRefreshKey((key) => key + 1) }} />
       </Modal>
     </AppShell>
   )
