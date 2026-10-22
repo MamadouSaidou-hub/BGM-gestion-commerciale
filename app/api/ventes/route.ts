@@ -54,19 +54,17 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Ce magasin n’est pas le vôtre.' }, { status: 403 })
   }
 
-  const parsedItems = items.map((item: { productId: unknown; quantity: unknown; unitPrice: unknown; unit?: unknown; tonnage?: unknown }) => ({
+  const parsedItems = items.map((item: { productId: unknown; quantity: unknown; unit?: unknown; tonnage?: unknown }) => ({
     productId: Number(item.productId),
     quantity: Number(item.quantity),
-    unitPrice: Number(item.unitPrice),
     unit: item.unit === 'tonne' ? ('tonne' as const) : ('sack' as const),
     tonnage: item.tonnage !== undefined && item.tonnage !== null ? Number(item.tonnage) : undefined,
   }))
 
   if (
     parsedItems.some(
-      (item: { productId: number; quantity: number; unitPrice: number; unit: 'sack' | 'tonne'; tonnage: number | undefined }) =>
+      (item: { productId: number; quantity: number; unit: 'sack' | 'tonne'; tonnage: number | undefined }) =>
         !Number.isFinite(item.productId) ||
-        !Number.isFinite(item.unitPrice) ||
         (item.unit === 'tonne' ? !Number.isFinite(item.tonnage) || (item.tonnage as number) <= 0 : !Number.isFinite(item.quantity) || item.quantity <= 0),
     )
   ) {

@@ -57,6 +57,9 @@ function NewSaleForm({
 }) {
   const [storeId, setStoreId] = useState('')
   const [clientId, setClientId] = useState('')
+  const [creatingClient, setCreatingClient] = useState(false)
+  const [newClientName, setNewClientName] = useState('')
+  const [newClientPhone, setNewClientPhone] = useState('')
   const [paymentStatus, setPaymentStatus] = useState<'paid' | 'partial' | 'credit'>('paid')
   const [paidNow, setPaidNow] = useState('')
   const [dueInDays, setDueInDays] = useState('15')
@@ -101,25 +104,43 @@ function NewSaleForm({
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault()
     setError('')
-    if (paymentStatus !== 'paid' && !clientId) {
+    if (creatingClient && !newClientName.trim()) {
+      setError('Le nom du nouveau client est requis.')
+      return
+    }
+    if (!creatingClient && paymentStatus !== 'paid' && !clientId) {
       setError('Un client est requis pour une vente partielle ou à crédit.')
       return
     }
     setSubmitting(true)
     try {
+      let effectiveClientId = clientId || null
+      if (creatingClient) {
+        const clientRes = await fetch('/api/clients', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: newClientName, phone: newClientPhone || undefined, storeId }),
+        })
+        const clientJson = await clientRes.json()
+        if (!clientRes.ok) {
+          setError(clientJson.error ?? 'Impossible de créer le client.')
+          return
+        }
+        effectiveClientId = clientJson.client.id
+      }
+
       const res = await fetch('/api/ventes', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           storeId,
-          clientId: clientId || null,
+          clientId: effectiveClientId,
           paymentStatus,
           paidNow: paymentStatus === 'partial' ? paidNow : 0,
           dueInDays,
           items: items.map((item) => ({
             productId: item.productId,
             quantity: item.unit === 'tonne' ? effectiveSacks(item) : item.quantity,
-            unitPrice: item.unitPrice,
             unit: item.unit,
             tonnage: item.unit === 'tonne' ? item.tonnage : undefined,
           })),
@@ -147,11 +168,33 @@ function NewSaleForm({
           </select>
         </div>
         <div className="form-field">
-          <label>Client (optionnel)</label>
-          <select value={clientId} onChange={(event) => setClientId(event.target.value)}>
-            <option value="">Vente comptoir</option>
-            {clientOptions.map((option) => <option key={option.id} value={option.id}>{option.name}</option>)}
-          </select>
+          <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <span>Client {creatingClient ? '' : '(optionnel)'}</span>
+            <button
+              type="button"
+              className="item-add-link"
+              style={{ fontSize: 11 }}
+              onClick={() => {
+                setCreatingClient((value) => !value)
+                setClientId('')
+                setNewClientName('')
+                setNewClientPhone('')
+              }}
+            >
+              {creatingClient ? 'Choisir un client existant' : '+ Nouveau client'}
+            </button>
+          </label>
+          {creatingClient ? (
+            <div className="form-row" style={{ marginTop: 6 }}>
+              <input required placeholder="Nom du client" value={newClientName} onChange={(event) => setNewClientName(event.target.value)} />
+              <input placeholder="Téléphone (optionnel)" value={newClientPhone} onChange={(event) => setNewClientPhone(event.target.value)} />
+            </div>
+          ) : (
+            <select value={clientId} onChange={(event) => setClientId(event.target.value)}>
+              <option value="">Vente comptoir</option>
+              {clientOptions.map((option) => <option key={option.id} value={option.id}>{option.name}</option>)}
+            </select>
+          )}
         </div>
       </div>
 
@@ -177,7 +220,7 @@ function NewSaleForm({
                   <input required type="number" min="1" placeholder={`Qté (${businessConfig.unit.basePluralLower})`} value={item.quantity} onChange={(event) => updateItem(index, { quantity: event.target.value })} />
                 </div>
               )}
-              <div className="form-field" style={{ marginBottom: 0 }}><input required type="number" min="0" placeholder="Prix" value={item.unitPrice} onChange={(event) => updateItem(index, { unitPrice: event.target.value })} /></div>
+              <div className="form-field" style={{ marginBottom: 0 }}><input readOnly disabled value={item.unitPrice ? `${Number(item.unitPrice).toLocaleString('fr-FR')} ${businessConfig.currency}` : 'Prix'} title="Prix catalogue — non modifiable" /></div>
               <button type="button" className="item-row-remove" onClick={() => removeItem(index)} disabled={items.length === 1} aria-label="Retirer la ligne"><Trash2 size={14} /></button>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 4 }}>

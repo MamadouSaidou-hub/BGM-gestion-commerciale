@@ -65,7 +65,7 @@ describe('createSale', () => {
       paymentStatus: 'paid',
       paidNow: 0,
       dueInDays: 15,
-      items: [{ productId: sackProductId, quantity: 10, unitPrice: 1000 }],
+      items: [{ productId: sackProductId, quantity: 10 }],
     })
     saleIds.push(sale.id)
     expect(await stockOf(sackProductId)).toBe(before - 10)
@@ -78,7 +78,7 @@ describe('createSale', () => {
       paymentStatus: 'partial',
       paidNow: 4000,
       dueInDays: 15,
-      items: [{ productId: sackProductId, quantity: 10, unitPrice: 1000 }], // total = 10,000
+      items: [{ productId: sackProductId, quantity: 10 }], // total = 10,000
     })
     saleIds.push(sale.id)
 
@@ -98,7 +98,7 @@ describe('createSale', () => {
         paymentStatus: 'paid',
         paidNow: 0,
         dueInDays: 15,
-        items: [{ productId: sackProductId, quantity: before + 1000, unitPrice: 1000 }],
+        items: [{ productId: sackProductId, quantity: before + 1000 }],
       }),
     ).rejects.toThrow(/stock insuffisant/i)
     expect(await stockOf(sackProductId)).toBe(before)
@@ -112,7 +112,7 @@ describe('createSale', () => {
       paymentStatus: 'paid',
       paidNow: 0,
       dueInDays: 15,
-      items: [{ productId: tonneProductId, quantity: 0, unitPrice: 1000, unit: 'tonne', tonnage: 2.5 }], // 2.5t / 25kg = 100 sacks
+      items: [{ productId: tonneProductId, quantity: 0, unit: 'tonne', tonnage: 2.5 }], // 2.5t / 25kg = 100 sacks
     })
     saleIds.push(sale.id)
 
@@ -131,7 +131,7 @@ describe('createSale', () => {
         paymentStatus: 'paid',
         paidNow: 0,
         dueInDays: 15,
-        items: [{ productId: sackProductId, quantity: 0, unitPrice: 1000, unit: 'tonne', tonnage: 1 }],
+        items: [{ productId: sackProductId, quantity: 0, unit: 'tonne', tonnage: 1 }],
       }),
     ).rejects.toThrow(/poids de sac/i)
   })

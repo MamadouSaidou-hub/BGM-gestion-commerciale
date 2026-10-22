@@ -10,7 +10,7 @@ export async function createSale(input: {
   paymentStatus: 'paid' | 'partial' | 'credit'
   paidNow: number
   dueInDays: number
-  items: { productId: number; quantity: number; unitPrice: number; unit?: 'sack' | 'tonne'; tonnage?: number }[]
+  items: { productId: number; quantity: number; unit?: 'sack' | 'tonne'; tonnage?: number }[]
 }) {
   if (input.items.length === 0) {
     throw new Error('Une vente doit contenir au moins un article.')
@@ -21,18 +21,25 @@ export async function createSale(input: {
     const productMap = new Map(productRows.map((product) => [product.id, product]))
 
     const items = input.items.map((item) => {
+      const product = productMap.get(item.productId)
+      if (!product) {
+        throw new Error('Article introuvable.')
+      }
+      // The sale price always comes from the product catalog, never from client input — a seller
+      // cannot under- or over-charge by tampering with the request.
+      const unitPrice = product.unitPrice
+
       if (item.unit === 'tonne') {
-        const product = productMap.get(item.productId)
-        if (!product?.sackWeightKg) {
+        if (!product.sackWeightKg) {
           throw new Error(
             `Ce produit n'a pas de poids de ${businessConfig.unit.baseSingularLower} configuré, vente en ${businessConfig.unit.bulkLabel.toLowerCase()}s impossible.`,
           )
         }
         const tonnage = item.tonnage ?? 0
         const quantity = Math.round((tonnage * businessConfig.unit.bulkConversionFactor) / product.sackWeightKg)
-        return { ...item, quantity, unit: 'tonne' as const, tonnage }
+        return { ...item, quantity, unitPrice, unit: 'tonne' as const, tonnage }
       }
-      return { ...item, unit: 'sack' as const, tonnage: null }
+      return { ...item, unitPrice, unit: 'sack' as const, tonnage: null }
     })
 
     for (const item of items) {
