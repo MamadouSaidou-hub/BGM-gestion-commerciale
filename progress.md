@@ -2,7 +2,7 @@
 
 Ce fichier sert de mémoire de projet : ce qui existe, comment c'est construit, ce qui reste à faire. À tenir à jour à chaque évolution significative.
 
-Dernière mise à jour : 2026-09-04.
+Dernière mise à jour : 2026-10-23.
 
 ## 1. Contexte métier
 
@@ -74,7 +74,7 @@ Voir `README.md` pour en créer d'autres.
 
 ## 5. Dette technique / points ouverts
 
-- **Pas de sélecteur de méthode de paiement à la vente** — `createSale` force `method: 'cash'` pour la part payée immédiatement d'une vente partielle. À ajouter si besoin de distinguer OM/virement/chèque dès la vente.
+- ~~Pas de sélecteur de méthode de paiement à la vente~~ — **corrigé le 23/10** (voir section 20).
 - **Remise par palier** : calcul déclenché manuellement (bouton "Calculer"), pas de tâche planifiée à minuit — aucune infra de cron dans l'appli. Un vrai calcul automatique en fin de mois nécessiterait un scheduler externe (ex: Vercel Cron) appelant `computeDiscount` pour chaque barème.
 - **Rapports** : page existante mais pas d'export CSV dessus (contrairement aux 5 autres pages).
 - **Tests automatisés** : un socle existe désormais (voir section 8) — `lib/session.ts` (unitaire) + ventes/transferts/remise fournisseur (intégration). Pas de couverture e2e navigateur, pas de tests sur les autres mutations (paiements, comptage physique, etc.).
@@ -263,3 +263,36 @@ Vérifié : `tsc` propre, les 19 tests Vitest passent **sans aucune modification
 2. **RLS (Row-Level Security) activé par défaut par Supabase sur toute nouvelle table**, alors que le reste du schéma n'en a pas (l'autorisation est gérée entièrement côté application via better-auth/`isAdmin()`, pas par des policies Postgres) — il faut explicitement `ALTER TABLE ... DISABLE ROW LEVEL SECURITY` sur chaque nouvelle table, sinon tout accès est silencieusement refusé même avec les bons `GRANT`.
 
 Vérifié : `tsc` propre, 25 tests Vitest verts (6 nouveaux pour `cash-accounts`, y compris le test de concurrence), test manuel de bout en bout via `pnpm dev` + `curl` authentifié (création de caisse, enregistrement d'une dépense, solde correctement débité, export CSV fonctionnel) — données de test nettoyées après coup.
+
+## 19. PWA, prix de revient éditable, marge par produit, prix de vente verrouillé, client à la volée (22/10/2026)
+
+**PWA** : `app/manifest.ts` (convention Next.js, servi à `/manifest.webmanifest`), métadonnées `appleWebApp` dans `app/layout.tsx` (via `generateMetadata`), icônes réutilisant `/logo-bgm.jpeg` (1254×1254, fonctionne mais pas un PNG 192/512 dédié — acceptable, pas corrigé). **Piège** : le manifest était bloqué par `middleware.ts` (redirection vers `/login` pour tout visiteur non authentifié, y compris les requêtes de fichiers statiques) — ajouté à la liste d'exclusion du matcher, même type de piège que le logo en section 16.
+
+**Prix de revient éditable + marge par produit dans Rapports** : jusqu'ici `products.costPrice` n'était modifiable qu'à la création, jamais après. Ajout de `updateProduct()` (`lib/db/mutations/products.ts`) + route `PATCH /api/products/[id]` (admin uniquement) + bouton "Prix" sur chaque ligne de la page Stock ouvrant un petit formulaire (prix de vente + prix de revient). Le nouveau prix de revient ne s'applique qu'aux ventes futures — l'historique financier n'est jamais réécrit. `lib/db/queries/reports.ts` étendu pour calculer la marge par produit (basée sur le `costPrice` **actuel** du produit, pas celui en vigueur au moment de chaque vente historique — limite connue et documentée, le total global de marge reste lui exact car basé sur `sales.costAmount`, figé au moment de la vente).
+
+**Prix de vente verrouillé au catalogue** : avant ce changement, le prix d'un article de vente était un champ libre rempli par le vendeur — un gestionnaire pouvait donc vendre à n'importe quel prix, y compris via un appel API direct en contournant le formulaire. Corrigé en profondeur : `lib/db/mutations/sales.ts`/`createSale` lit désormais `product.unitPrice` directement depuis la base pour chaque ligne, **ignore totalement** tout prix envoyé par le client ; `app/api/ventes/route.ts` ne parse/valide même plus de `unitPrice` dans le corps de la requête ; côté UI (`components/sales-view.tsx`), le champ prix devient un affichage en lecture seule. Impact sur les tests : les appels `createSale(...)` dans `tests/sales.test.ts` passaient un `unitPrice` par ligne — retiré, le type `items` de `createSale` ne l'accepte plus du tout.
+
+**Création de client à la volée pendant une vente** : pour une vente partielle/à crédit, il fallait auparavant quitter le formulaire de vente, créer le client sur la page Clients, puis revenir. Ajout d'un bouton "+ Nouveau client" dans `NewSaleForm` qui bascule le select client en deux champs (nom, téléphone) ; à la soumission, `POST /api/clients` est appelé d'abord pour créer le client, puis son id est injecté dans la requête de vente — un seul flux, pas d'aller-retour entre pages.
+
+Vérifié : `tsc` propre, build Next.js propre (routes `/api/products/[id]` générée), 25 tests Vitest verts après ajustement de `tests/sales.test.ts`, test manuel via `pnpm dev` (édition de prix sur un article existant, vente avec prix verrouillé confirmé non modifiable depuis le formulaire, création de client inline suivie d'une vente à crédit réussie).
+
+## 20. Cohérence Caisse & Dépenses (caisse unique + virements) et recherche globale, portées depuis le fork démo (23/10/2026)
+
+**Contexte** : suite à la section 17, le dépôt a effectivement été dupliqué (`Gescom_demo`, dépôt GitHub séparé) pour servir de démo commerciale paramétrable (nom d'entreprise/pays/devise/logo éditables en direct depuis une page Paramètres, pensée pour re-thématiser l'app en live devant un prospect). Plusieurs fonctionnalités ont été développées d'abord sur ce fork, puis celles qui ont du sens pour BGM seul (pas de besoin de multi-devise/multi-pays pour un client unique) ont été **reportées manuellement** ici — pas de merge Git direct, les deux dépôts ayant divergé sur la gestion de la devise (`useSettings()` côté démo vs `businessConfig.currency` statique ici).
+
+**Incohérence corrigée — Caisse & Dépenses déconnectée du reste de l'app** : jusqu'ici, encaisser une vente ou un paiement client/fournisseur ne touchait jamais une caisse — il fallait ressaisir le même montant à la main dans Caisse & Dépenses, facilement oublié. Corrigé :
+- `recordAutoCashMovement()` (`lib/db/mutations/cash-accounts.ts`) : enregistre automatiquement un mouvement de caisse (dépôt ou dépense) à chaque vente payée/partiellement payée, paiement client, paiement fournisseur.
+- **Choix volontairement simple** (demandé explicitement) : tout passe par **une seule caisse "principale"** (`cash_accounts.is_default`, au plus une ligne `true` à la fois — appliqué par `setDefaultCashAccount()`, pas de contrainte DB), peu importe le mode de paiement ou le magasin. Redistribuer vers d'autres caisses (banque, Mobile Money...) se fait ensuite via un **virement manuel** (`transferBetweenCashAccounts()` — débite l'une, crédite l'autre, atomique, les deux mouvements tracés comme "Transfert interne"). Si aucune caisse n'est encore marquée principale, repli sur la plus ancienne créée ; si aucune caisse n'existe du tout, le mouvement est simplement ignoré — **ne bloque jamais** la vente/le paiement lui-même.
+- **Bug corrigé au passage** : le "Total encaissé" affiché sur la fiche client (`lib/db/queries/clients.ts`) ne comptait que les paiements partiels/`recordPayment` — une vente payée comptant au comptoir n'avait **jamais** de ligne dans `payments`, donc n'était jamais comptée. `createSale` insère désormais une ligne `payments` dès qu'un client est associé à la vente, peu importe si elle est payée en entier ou partiellement.
+- Ajout d'un sélecteur de mode de paiement (espèces/Mobile Money/virement/chèque) sur le formulaire de vente — comblait la dette technique notée en section 5 ("Pas de sélecteur de méthode de paiement à la vente").
+- UI (`components/caisse-view.tsx`) : badge étoile + mention "Caisse principale" sur la carte concernée, bouton "Définir comme principale" sur les autres, nouveau bouton "Transférer" (modal dédié).
+
+**Recherche globale** : l'icône loupe de la barre du haut était un bouton décoratif sans effet depuis le début. Remplacée par un vrai composant `GlobalSearch` (`components/app-shell.tsx`) — recherche avec anti-rebond (250ms) sur `/api/recherche` (`lib/db/queries/search.ts`), qui interroge produits/clients/ventes en parallèle, plus fournisseurs/magasins pour les admins uniquement. Scoping identique au reste de l'app : un gestionnaire ne voit que les clients/ventes de son magasin. Cliquer un résultat "vente" ouvre directement sa facture ; les autres types renvoient vers leur page de liste avec le terme pré-rempli via `?q=` (nécessite un `<Suspense>` autour de `useSearchParams()` dans `app/stock/page.tsx`, `app/clients/page.tsx`, `app/fournisseurs/page.tsx` — sans ça, Next.js refuse de construire ces pages en statique).
+
+**Facture — montant en toutes lettres** : `lib/number-to-words.ts` (nouveau, aucune dépendance externe) convertit un montant en lettres françaises, en gérant correctement les règles d'accord irrégulières de "cent"/"quatre-vingts" (perdent leur 's' uniquement s'ils précèdent immédiatement un autre mot du nombre — ex. "trois cent mille" sans s, mais "trois cents" seul ou "deux cent quatre-vingts" avec s). Affiché sur la facture écran et dans le PDF généré : "Arrêtée la présente facture à la somme de : cent cinquante mille GNF".
+
+**Pièges base de données rencontrés pendant le portage** (aucun nouveau par rapport à ceux déjà documentés, mais reconfirmés sur la vraie base BGM) :
+- `cash_accounts`/`cash_movements` n'existaient en réalité **pas du tout** sur la vraie base de production BGM avant cette session (la section 18 documentait le développement de la fonctionnalité, mais elle n'avait jamais été réellement migrée/testée en conditions réelles chez BGM — seulement sur le fork démo). Créées via le SQL Editor Supabase par l'utilisateur (le rôle applicatif `commercial_app` n'a pas le droit `CREATE` sur le schéma `commercial`, cf. piège de la section 18).
+- Ajout de la colonne `cash_accounts.is_default` via `ALTER TABLE commercial.cash_accounts ADD COLUMN ...` — a d'abord échoué avec `relation "cash_accounts" does not exist` car l'éditeur SQL Supabase cible le schéma `public` par défaut, pas `commercial` ; corrigé en qualifiant explicitement le nom de table (`commercial.cash_accounts`).
+
+Vérifié : `tsc` propre, build Next.js propre (36 routes), 25 tests Vitest verts (y compris `tests/cash-accounts.test.ts`, qui échouait avant la création des tables — confirmé que l'échec était bien dû à l'absence des tables puis résolu après la migration manuelle), test manuel via `pnpm dev` sur chacune des trois fonctionnalités.
