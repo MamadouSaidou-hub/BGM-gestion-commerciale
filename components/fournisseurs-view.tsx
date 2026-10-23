@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { AlertTriangle, Package, Percent, Plus, Search, Truck, Wallet, WalletCards } from 'lucide-react'
 import { AppShell } from '@/components/app-shell'
 import { Modal } from '@/components/modal'
@@ -235,7 +236,8 @@ function RecordSupplierPaymentForm({ supplier, onCreated }: { supplier: Supplier
 }
 
 export function FournisseursView() {
-  const [search, setSearch] = useState('')
+  const searchParams = useSearchParams()
+  const [search, setSearch] = useState(() => searchParams.get('q') ?? '')
   const [data, setData] = useState<SuppliersData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')

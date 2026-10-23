@@ -1,5 +1,10 @@
+import { Suspense } from 'react'
 import { FournisseursView } from '@/components/fournisseurs-view'
 
 export default function Page() {
-  return <FournisseursView />
+  return (
+    <Suspense>
+      <FournisseursView />
+    </Suspense>
+  )
 }

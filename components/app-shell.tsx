@@ -118,6 +118,122 @@ function UserChip() {
   )
 }
 
+type SearchResult = { type: 'product' | 'client' | 'sale' | 'supplier' | 'store'; label: string; subtitle: string; href: string }
+const searchTypeIcon: Record<SearchResult['type'], typeof Package> = { product: Package, client: Users, sale: ShoppingCart, supplier: Truck, store: Store }
+
+function GlobalSearch() {
+  const router = useRouter()
+  const [open, setOpen] = useState(false)
+  const [query, setQuery] = useState('')
+  const [results, setResults] = useState<SearchResult[]>([])
+  const [loading, setLoading] = useState(false)
+  const wrapRef = useRef<HTMLDivElement>(null)
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  useEffect(() => {
+    function onClickOutside(event: MouseEvent) {
+      if (wrapRef.current && !wrapRef.current.contains(event.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', onClickOutside)
+    return () => document.removeEventListener('mousedown', onClickOutside)
+  }, [])
+
+  useEffect(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+    if (query.trim().length < 2) {
+      setResults([])
+      setLoading(false)
+      return
+    }
+    setLoading(true)
+    debounceRef.current = setTimeout(() => {
+      fetch(`/api/recherche?q=${encodeURIComponent(query.trim())}`)
+        .then((res) => res.json())
+        .then((json) => setResults(json.results ?? []))
+        .catch(() => setResults([]))
+        .finally(() => setLoading(false))
+    }, 250)
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current)
+    }
+  }, [query])
+
+  function go(result: SearchResult) {
+    setOpen(false)
+    setQuery('')
+    setResults([])
+    router.push(result.href)
+  }
+
+  return (
+    <div ref={wrapRef} style={{ position: 'relative' }}>
+      {open && (
+        <input
+          className="search-input"
+          autoFocus
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          onKeyDown={(event) => event.key === 'Escape' && setOpen(false)}
+          placeholder="Rechercher un article, un client, une vente..."
+          aria-label="Recherche globale"
+        />
+      )}
+      <button className="icon-button" onClick={() => setOpen((value) => !value)} aria-label="Rechercher"><Search /></button>
+      {open && query.trim().length >= 2 && (
+        <div
+          style={{
+            position: 'absolute',
+            top: '100%',
+            right: 0,
+            marginTop: 6,
+            width: 340,
+            maxHeight: 380,
+            overflowY: 'auto',
+            background: 'var(--card)',
+            border: '1px solid var(--border)',
+            borderRadius: 8,
+            boxShadow: '0 8px 24px rgba(16,25,41,.2)',
+            zIndex: 50,
+          }}
+        >
+          {loading && <p style={{ padding: 14, fontSize: 12, color: 'var(--muted)' }}>Recherche...</p>}
+          {!loading && results.length === 0 && <p style={{ padding: 14, fontSize: 12, color: 'var(--muted)' }}>Aucun résultat pour « {query} ».</p>}
+          {!loading &&
+            results.map((result, index) => {
+              const Icon = searchTypeIcon[result.type]
+              return (
+                <button
+                  key={`${result.type}-${index}`}
+                  type="button"
+                  onClick={() => go(result)}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 10,
+                    width: '100%',
+                    padding: '10px 14px',
+                    border: 0,
+                    borderBottom: '1px solid var(--border)',
+                    background: 'none',
+                    cursor: 'pointer',
+                    textAlign: 'left',
+                    font: 'inherit',
+                  }}
+                >
+                  <Icon size={15} style={{ color: 'var(--faint)', flexShrink: 0 }} />
+                  <span style={{ overflow: 'hidden' }}>
+                    <span style={{ display: 'block', fontSize: 13, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{result.label}</span>
+                    <span style={{ display: 'block', fontSize: 11, color: 'var(--muted)' }}>{result.subtitle}</span>
+                  </span>
+                </button>
+              )
+            })}
+        </div>
+      )}
+    </div>
+  )
+}
+
 export function AppShell({
   breadcrumb,
   section,
@@ -131,7 +247,6 @@ export function AppShell({
 }) {
   const pathname = usePathname()
   const [menuOpen, setMenuOpen] = useState(false)
-  const [searchOpen, setSearchOpen] = useState(false)
   const { data: session } = authClient.useSession()
   const isAdmin = session?.user?.role === 'admin'
 
@@ -170,8 +285,7 @@ export function AppShell({
           <div className="breadcrumb"><span>{breadcrumb}</span><strong>{section}</strong></div>
           <div className="topbar-actions">
             <AppearanceMenu variant="topbar" />
-            {searchOpen && <input className="search-input" autoFocus placeholder="Rechercher..." aria-label="Rechercher" />}
-            <button className="icon-button" onClick={() => setSearchOpen(!searchOpen)} aria-label="Rechercher"><Search /></button>
+            <GlobalSearch />
             <NotificationMenu />
             {onExport && <button className="export-button" onClick={onExport}><Download /> Exporter</button>}
           </div>

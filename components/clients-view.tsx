@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { AlertTriangle, CreditCard, Percent, Plus, Search, Users, Wallet, WalletCards } from 'lucide-react'
 import { AppShell } from '@/components/app-shell'
 import { Modal } from '@/components/modal'
@@ -148,7 +149,8 @@ function RecordPaymentForm({ client, storeOptions, onCreated }: { client: Client
 export function ClientsView() {
   const { data: session } = authClient.useSession()
   const isAdmin = session?.user?.role === 'admin'
-  const [search, setSearch] = useState('')
+  const searchParams = useSearchParams()
+  const [search, setSearch] = useState(() => searchParams.get('q') ?? '')
   const [data, setData] = useState<ClientsData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
