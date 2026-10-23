@@ -2,6 +2,8 @@ import { notFound } from 'next/navigation'
 import { getSaleDetail } from '@/lib/db/queries'
 import { getSessionContext, isAdmin } from '@/lib/session'
 import { companyInfo } from '@/lib/company-info'
+import { businessConfig } from '@/lib/business-config'
+import { amountInWords } from '@/lib/number-to-words'
 import { InvoiceActions } from './invoice-actions'
 
 const statusLabel = { paid: 'Payée', partial: 'Partielle', credit: 'À crédit' }
@@ -104,6 +106,10 @@ export default async function Page({ params }: { params: Promise<{ reference: st
               )}
             </div>
           </div>
+
+          <p style={{ fontSize: 10.5, color: MUTED, fontStyle: 'italic', margin: '10px 0 0' }}>
+            Arrêtée la présente facture à la somme de : <strong style={{ color: NAVY, fontStyle: 'normal' }}>{amountInWords(sale.totalAmount)} {businessConfig.currency}</strong>
+          </p>
         </div>
 
         <div className="invoice-footer" style={{ borderTop: `1px solid ${BORDER}` }}>
