@@ -61,6 +61,7 @@ function NewSaleForm({
   const [newClientName, setNewClientName] = useState('')
   const [newClientPhone, setNewClientPhone] = useState('')
   const [paymentStatus, setPaymentStatus] = useState<'paid' | 'partial' | 'credit'>('paid')
+  const [paymentMethod, setPaymentMethod] = useState<'cash' | 'mobile_money' | 'bank_transfer' | 'check'>('cash')
   const [paidNow, setPaidNow] = useState('')
   const [dueInDays, setDueInDays] = useState('15')
   const [items, setItems] = useState<ItemRow[]>([{ productId: '', quantity: '1', unitPrice: '', unit: 'sack', tonnage: '' }])
@@ -137,6 +138,7 @@ function NewSaleForm({
           clientId: effectiveClientId,
           paymentStatus,
           paidNow: paymentStatus === 'partial' ? paidNow : 0,
+          method: paymentStatus !== 'credit' ? paymentMethod : undefined,
           dueInDays,
           items: items.map((item) => ({
             productId: item.productId,
@@ -261,6 +263,17 @@ function NewSaleForm({
             <option value="credit">À crédit</option>
           </select>
         </div>
+        {paymentStatus !== 'credit' && (
+          <div className="form-field">
+            <label>Mode de paiement</label>
+            <select value={paymentMethod} onChange={(event) => setPaymentMethod(event.target.value as typeof paymentMethod)}>
+              <option value="cash">Espèces</option>
+              <option value="mobile_money">Mobile Money</option>
+              <option value="bank_transfer">Virement</option>
+              <option value="check">Chèque</option>
+            </select>
+          </div>
+        )}
         {paymentStatus === 'partial' && (
           <div className="form-field"><label>Montant payé maintenant</label><input required type="number" min="0" max={total} value={paidNow} onChange={(event) => setPaidNow(event.target.value)} /></div>
         )}

@@ -1,6 +1,7 @@
 import { and, asc, eq, ne } from 'drizzle-orm'
 import { db } from '../client'
 import { payments, paymentMethod, receivables, supplierPayables, supplierPayments } from '../schema'
+import { recordAutoCashMovement } from './cash-accounts'
 
 export async function recordPayment(input: { clientId: number; amount: number; method: (typeof paymentMethod)[number]; storeId: number }) {
   await db.insert(payments).values({
@@ -9,6 +10,13 @@ export async function recordPayment(input: { clientId: number; amount: number; m
     storeId: input.storeId,
     amount: input.amount,
     method: input.method,
+  })
+
+  await recordAutoCashMovement({
+    direction: 'in',
+    amount: input.amount,
+    storeId: input.storeId,
+    category: 'Encaissement client',
   })
 
   let remaining = input.amount
@@ -35,6 +43,13 @@ export async function recordSupplierPayment(input: { supplierId: number; amount:
     supplierId: input.supplierId,
     amount: input.amount,
     method: input.method,
+  })
+
+  // Suppliers aren't store-scoped, so this resolves to the default cash account regardless.
+  await recordAutoCashMovement({
+    direction: 'out',
+    amount: input.amount,
+    category: 'Paiement fournisseur',
   })
 
   let remaining = input.amount

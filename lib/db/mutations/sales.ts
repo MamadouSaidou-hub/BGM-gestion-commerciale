@@ -1,22 +1,25 @@
 import { and, eq, sql } from 'drizzle-orm'
 import { db } from '../client'
-import { payments, products, receivables, saleItems, sales, stockLevels, stockMovements } from '../schema'
+import { payments, paymentMethod, products, receivables, saleItems, sales, stockLevels, stockMovements } from '../schema'
 import { getQuantity } from './shared'
 import { businessConfig } from '@/lib/business-config'
+import { recordAutoCashMovement } from './cash-accounts'
 
 export async function createSale(input: {
   storeId: number
   clientId?: number | null
   paymentStatus: 'paid' | 'partial' | 'credit'
   paidNow: number
+  method?: (typeof paymentMethod)[number]
   dueInDays: number
   items: { productId: number; quantity: number; unit?: 'sack' | 'tonne'; tonnage?: number }[]
 }) {
   if (input.items.length === 0) {
     throw new Error('Une vente doit contenir au moins un article.')
   }
+  const method = input.method ?? 'cash'
 
-  return db.transaction(async (tx) => {
+  const sale = await db.transaction(async (tx) => {
     const productRows = await tx.select().from(products)
     const productMap = new Map(productRows.map((product) => [product.id, product]))
 
@@ -97,14 +100,20 @@ export async function createSale(input: {
       })
     }
 
-    if (input.paymentStatus === 'partial' && input.paidNow > 0 && input.clientId) {
-      await tx.insert(payments).values({
-        clientId: input.clientId,
-        saleId: sale.id,
-        storeId: input.storeId,
-        amount: input.paidNow,
-        method: 'cash',
-      })
+    // Recorded whenever money actually changes hands at the point of sale, and the sale has a
+    // client to attribute it to (payments.clientId is required) — fixes a client's "totalPaid"
+    // previously only counting partial top-ups, never a sale paid in full on the spot.
+    if (input.clientId) {
+      const paidAtSale = input.paymentStatus === 'paid' ? totalAmount : input.paymentStatus === 'partial' ? input.paidNow : 0
+      if (paidAtSale > 0) {
+        await tx.insert(payments).values({
+          clientId: input.clientId,
+          saleId: sale.id,
+          storeId: input.storeId,
+          amount: paidAtSale,
+          method,
+        })
+      }
     }
 
     if ((input.paymentStatus === 'credit' || input.paymentStatus === 'partial') && input.clientId) {
@@ -124,4 +133,19 @@ export async function createSale(input: {
 
     return sale
   })
+
+  // Outside the transaction: recordAutoCashMovement uses its own connection, and only runs once
+  // the sale has actually committed (never want a cash entry for a sale that got rolled back).
+  const receivedNow = input.paymentStatus === 'paid' ? sale.totalAmount : input.paymentStatus === 'partial' ? input.paidNow : 0
+  if (receivedNow > 0) {
+    await recordAutoCashMovement({
+      direction: 'in',
+      amount: receivedNow,
+      storeId: input.storeId,
+      category: 'Vente',
+      description: `Vente #${sale.reference}`,
+    })
+  }
+
+  return sale
 }

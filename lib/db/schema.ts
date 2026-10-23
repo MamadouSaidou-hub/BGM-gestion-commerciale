@@ -1,5 +1,5 @@
 import { relations } from 'drizzle-orm'
-import { doublePrecision, index, integer, pgTable, serial, text, uniqueIndex } from 'drizzle-orm/pg-core'
+import { boolean, doublePrecision, index, integer, pgTable, serial, text, uniqueIndex } from 'drizzle-orm/pg-core'
 
 const timestamps = {
   // JS-side default (not a DB-level `now()`/`current_timestamp`) so every timestamp in the app is
@@ -317,6 +317,10 @@ export const cashAccounts = pgTable(
     // Optionnel — sert juste à étiqueter/filtrer une caisse par magasin, pas à restreindre l'accès
     // (la page Caisse & Dépenses est réservée aux admins, qui voient toutes les caisses).
     storeId: integer('store_id').references(() => stores.id, { onDelete: 'set null' }),
+    // The single account every sale, client payment, and supplier payment auto-routes through —
+    // at most one row has this set to true (enforced in recordAutoCashMovement's mutation, not a
+    // DB constraint). Redistributing to other caisses is then a manual transfer.
+    isDefault: boolean('is_default').notNull().default(false),
     ...timestamps,
   },
   (table) => [index('cash_accounts_store_id_idx').on(table.storeId)],

@@ -44,9 +44,15 @@ export async function POST(request: NextRequest) {
   const body = await request.json()
   const storeId = Number(body.storeId)
   const paymentStatus = body.paymentStatus as 'paid' | 'partial' | 'credit'
+  const method = body.method as 'cash' | 'mobile_money' | 'bank_transfer' | 'check' | undefined
   const items = Array.isArray(body.items) ? body.items : []
 
-  if (!Number.isFinite(storeId) || !['paid', 'partial', 'credit'].includes(paymentStatus) || items.length === 0) {
+  if (
+    !Number.isFinite(storeId) ||
+    !['paid', 'partial', 'credit'].includes(paymentStatus) ||
+    (method !== undefined && !['cash', 'mobile_money', 'bank_transfer', 'check'].includes(method)) ||
+    items.length === 0
+  ) {
     return NextResponse.json({ error: 'Champs invalides ou manquants.' }, { status: 400 })
   }
 
@@ -77,6 +83,7 @@ export async function POST(request: NextRequest) {
       clientId: body.clientId ? Number(body.clientId) : null,
       paymentStatus,
       paidNow: Number(body.paidNow ?? 0),
+      method,
       dueInDays: Number(body.dueInDays ?? 15),
       items: parsedItems,
     })

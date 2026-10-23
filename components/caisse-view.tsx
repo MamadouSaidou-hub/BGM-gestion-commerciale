@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { ArrowDownCircle, ArrowUpCircle, Banknote, ChevronDown, Landmark, Plus, Smartphone, TrendingDown, TrendingUp, Wallet } from 'lucide-react'
+import { ArrowDownCircle, ArrowLeftRight, ArrowUpCircle, Banknote, ChevronDown, Landmark, Plus, Smartphone, Star, TrendingDown, TrendingUp, Wallet } from 'lucide-react'
 import { AppShell } from '@/components/app-shell'
 import { Modal } from '@/components/modal'
 import { LoadError } from '@/components/load-error'
@@ -11,7 +11,7 @@ import { downloadCsv } from '@/lib/download-csv'
 const periods = ['Aujourd’hui', '7 derniers jours', 'Ce mois-ci']
 
 type CashAccountType = 'cash' | 'bank' | 'mobile_money' | 'other'
-type CashAccount = { id: number; name: string; type: CashAccountType; balance: number; balanceFormatted: string }
+type CashAccount = { id: number; name: string; type: CashAccountType; balance: number; balanceFormatted: string; isDefault: boolean }
 type Movement = { id: number; date: string; account: string; type: 'expense' | 'deposit'; category: string; description: string | null; amountFormatted: string }
 type CaisseData = {
   accounts: CashAccount[]
@@ -142,6 +142,75 @@ function NewMovementForm({ type, accounts, onCreated }: { type: 'expense' | 'dep
   )
 }
 
+function TransferForm({ accounts, onCreated }: { accounts: CashAccount[]; onCreated: () => void }) {
+  const [fromId, setFromId] = useState('')
+  const [toId, setToId] = useState('')
+  const [amount, setAmount] = useState('')
+  const [description, setDescription] = useState('')
+  const [error, setError] = useState('')
+  const [submitting, setSubmitting] = useState(false)
+
+  useEffect(() => {
+    if (!fromId && accounts.length > 0) setFromId(String(accounts.find((a) => a.isDefault)?.id ?? accounts[0].id))
+  }, [accounts, fromId])
+  useEffect(() => {
+    if (!toId && accounts.length > 1) {
+      const other = accounts.find((account) => String(account.id) !== fromId)
+      if (other) setToId(String(other.id))
+    }
+  }, [accounts, fromId, toId])
+
+  async function handleSubmit(event: React.FormEvent) {
+    event.preventDefault()
+    setError('')
+    if (fromId === toId) {
+      setError('Choisissez deux caisses différentes.')
+      return
+    }
+    setSubmitting(true)
+    try {
+      const res = await fetch('/api/caisses/transfert', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fromId, toId, amount, description: description || undefined }),
+      })
+      const json = await res.json()
+      if (!res.ok) {
+        setError(json.error ?? 'Une erreur est survenue.')
+        return
+      }
+      onCreated()
+    } catch {
+      setError('Connexion instable — impossible de contacter le serveur. Réessayez.')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  return (
+    <form onSubmit={handleSubmit}>
+      {error && <p className="form-error">{error}</p>}
+      <div className="form-row">
+        <div className="form-field">
+          <label>De</label>
+          <select required value={fromId} onChange={(event) => setFromId(event.target.value)}>
+            {accounts.map((account) => <option key={account.id} value={account.id}>{account.name}{account.isDefault ? ' (principale)' : ''}</option>)}
+          </select>
+        </div>
+        <div className="form-field">
+          <label>Vers</label>
+          <select required value={toId} onChange={(event) => setToId(event.target.value)}>
+            {accounts.map((account) => <option key={account.id} value={account.id}>{account.name}{account.isDefault ? ' (principale)' : ''}</option>)}
+          </select>
+        </div>
+      </div>
+      <div className="form-field"><label>Montant (GNF)</label><input required type="number" min="1" value={amount} onChange={(event) => setAmount(event.target.value)} /></div>
+      <div className="form-field"><label>Description (optionnel)</label><input value={description} onChange={(event) => setDescription(event.target.value)} placeholder="Ex : Dépôt bancaire hebdomadaire" /></div>
+      <div className="form-actions"><button type="submit" className="btn-primary" disabled={submitting}>{submitting ? 'Transfert...' : 'Transférer'}</button></div>
+    </form>
+  )
+}
+
 export function CaisseView() {
   const [period, setPeriod] = useState(periods[1])
   const [data, setData] = useState<CaisseData | null>(null)
@@ -150,7 +219,13 @@ export function CaisseView() {
   const [accountModalOpen, setAccountModalOpen] = useState(false)
   const [expenseModalOpen, setExpenseModalOpen] = useState(false)
   const [depositModalOpen, setDepositModalOpen] = useState(false)
+  const [transferModalOpen, setTransferModalOpen] = useState(false)
   const [refreshKey, setRefreshKey] = useState(0)
+
+  async function makeDefault(id: number) {
+    await fetch(`/api/caisses/${id}/defaut`, { method: 'POST' })
+    setRefreshKey((key) => key + 1)
+  }
 
   useEffect(() => {
     let cancelled = false
@@ -194,6 +269,7 @@ export function CaisseView() {
       <div className="toolbar-panel">
         <div className="toolbar-spacer" />
         <button className="btn-secondary" onClick={() => setAccountModalOpen(true)}><Plus size={14} /> Nouvelle caisse</button>
+        <button className="btn-secondary" onClick={() => setTransferModalOpen(true)} disabled={accounts.length < 2}><ArrowLeftRight size={14} /> Transférer</button>
         <button className="btn-secondary" onClick={() => setDepositModalOpen(true)} disabled={accounts.length === 0}><ArrowUpCircle size={14} /> Nouveau dépôt</button>
         <button className="btn-primary" onClick={() => setExpenseModalOpen(true)} disabled={accounts.length === 0}><ArrowDownCircle size={14} /> Nouvelle dépense</button>
       </div>
@@ -206,9 +282,20 @@ export function CaisseView() {
               <article className="store-card" key={account.id}>
                 <div className="store-card-head">
                   <span className="store-card-icon"><Icon aria-hidden="true" /></span>
-                  <div><strong>{account.name}</strong><span>{typeLabel[account.type]}</span></div>
+                  <div>
+                    <strong>
+                      {account.name}
+                      {account.isDefault && <Star size={12} style={{ color: 'var(--orange)', marginLeft: 6, verticalAlign: 'middle' }} fill="var(--orange)" />}
+                    </strong>
+                    <span>{typeLabel[account.type]}{account.isDefault ? ' · Caisse principale' : ''}</span>
+                  </div>
                 </div>
                 <p className="metric-value" style={{ margin: 0 }}>{account.balanceFormatted}</p>
+                {!account.isDefault && (
+                  <button type="button" className="item-add-link" style={{ fontSize: 11, marginTop: 8 }} onClick={() => makeDefault(account.id)}>
+                    Définir comme principale
+                  </button>
+                )}
               </article>
             )
           })}
@@ -253,6 +340,10 @@ export function CaisseView() {
 
       <Modal open={depositModalOpen} onClose={() => setDepositModalOpen(false)} title="Nouveau dépôt" subtitle="Ajoutez de l’argent dans une caisse.">
         <NewMovementForm type="deposit" accounts={accounts} onCreated={() => { setDepositModalOpen(false); setRefreshKey((key) => key + 1) }} />
+      </Modal>
+
+      <Modal open={transferModalOpen} onClose={() => setTransferModalOpen(false)} title="Transférer entre caisses" subtitle="Déplacez de l’argent de la caisse principale vers une autre (ou inversement).">
+        <TransferForm accounts={accounts} onCreated={() => { setTransferModalOpen(false); setRefreshKey((key) => key + 1) }} />
       </Modal>
     </AppShell>
   )

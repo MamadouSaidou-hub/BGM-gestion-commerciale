@@ -38,6 +38,7 @@ export async function getCashAccountsOverview(period: PeriodKey) {
       type: row.type,
       balance: row.balance,
       balanceFormatted: formatFcfa(row.balance),
+      isDefault: row.isDefault,
     })),
     movements: movementRows.map((row) => ({
       id: row.id,
