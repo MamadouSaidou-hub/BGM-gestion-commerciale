@@ -22,7 +22,7 @@ type Metric = { value: string; helper: string; trend: string }
 type DueAlert = { kind: 'client' | 'supplier'; name: string; amount: string; dueDate: string; daysUntilDue: number }
 type DashboardData = {
   stores: string[]
-  metrics: { revenue: Metric; margin: Metric; lowStock: Metric; receivables: Metric }
+  metrics: { revenue: Metric; margin?: Metric; lowStock: Metric; receivables: Metric }
   salesTrend: { day: string; value: number }[]
   storePerformance: { name: string; amount: number; pct: number }[]
   activity: { title: string; subtitle: string; amount: string; tone: 'green' | 'blue' | 'orange' | 'purple'; icon: 'sale' | 'stock' | 'payment' | 'transfer' }[]
@@ -100,7 +100,9 @@ export function DashboardView() {
 
       <section className="metrics-grid" aria-label="Indicateurs clés">
         <MetricCard label="Chiffre d’affaires" value={data?.metrics.revenue.value ?? '—'} helper={data?.metrics.revenue.helper ?? ''} trend={data?.metrics.revenue.trend ?? ''} icon={WalletCards} tone="navy" />
-        <MetricCard label="Marge brute" value={data?.metrics.margin.value ?? '—'} helper={data?.metrics.margin.helper ?? ''} trend={data?.metrics.margin.trend ?? ''} icon={ArrowUpRight} tone="green" />
+        {data?.metrics.margin && (
+          <MetricCard label="Marge brute" value={data.metrics.margin.value} helper={data.metrics.margin.helper} trend={data.metrics.margin.trend} icon={ArrowUpRight} tone="green" />
+        )}
         <MetricCard label="Articles en stock faible" value={data?.metrics.lowStock.value ?? '—'} helper={data?.metrics.lowStock.helper ?? ''} trend={data?.metrics.lowStock.trend ?? ''} icon={AlertTriangle} tone="orange" />
         <MetricCard label="Créances à recouvrer" value={data?.metrics.receivables.value ?? '—'} helper={data?.metrics.receivables.helper ?? ''} trend={data?.metrics.receivables.trend ?? ''} icon={CreditCard} tone="blue" />
       </section>

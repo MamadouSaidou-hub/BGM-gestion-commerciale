@@ -59,8 +59,12 @@ export async function createSale(input: {
       return sum + item.quantity * (product?.costPrice ?? 0)
     }, 0)
 
-    const [{ count }] = await tx.select({ count: sql<number>`count(*)`.mapWith(Number) }).from(sales)
-    const reference = `BG-${1000 + count + 1}`
+    // A Postgres sequence (not a count of existing rows) — counting breaks the moment a sale is
+    // ever deleted (reused number) or two sales are created at nearly the same instant (both read
+    // the same count before either inserts, both compute the same reference, the second insert
+    // fails on the unique constraint). nextval() is atomic and never hands out the same value twice.
+    const seqResult = await tx.execute<{ next: string }>(sql`SELECT nextval('sales_reference_seq') AS next`)
+    const reference = `BG-${seqResult.rows[0].next}`
 
     const [sale] = await tx
       .insert(sales)

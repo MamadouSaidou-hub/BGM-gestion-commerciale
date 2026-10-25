@@ -17,8 +17,13 @@ export async function GET(request: NextRequest) {
     getDueDateAlerts(isAdmin(ctx) ? null : ctx.storeId, isAdmin(ctx)),
   ])
 
+  // La marge (coût vs prix de vente) est une donnée financière sensible, réservée aux admins —
+  // un gestionnaire voit son chiffre d'affaires mais pas la rentabilité qui en découle.
+  const { margin, ...metricsForRole } = data.metrics
+
   return NextResponse.json({
     ...data,
+    metrics: isAdmin(ctx) ? data.metrics : metricsForRole,
     dueAlerts,
     stores: scopedStoreList(ctx, storeOptions.map((row) => row.name)),
   })
