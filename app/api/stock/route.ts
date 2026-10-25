@@ -11,10 +11,17 @@ export async function GET(request: NextRequest) {
 
   const store = effectiveStoreParam(ctx, request.nextUrl.searchParams.get('store'))
   const [data, storeOptions] = await Promise.all([getStockOverview(store), getStoreOptions()])
+  const admin = isAdmin(ctx)
+
+  // Prix d'achat, prix de vente et valeur du stock sont des données financières réservées aux
+  // admins — un gestionnaire gère les quantités, pas la tarification ni la valorisation du stock.
+  const items = admin ? data.items : data.items.map(({ unitPrice, unitPriceRaw, costPriceRaw, ...rest }) => rest)
+  const products = admin ? data.products : data.products.map(({ unitPrice, unitPriceRaw, costPriceRaw, ...rest }) => rest)
+  const summary = admin ? data.summary : { ...data.summary, stockValue: undefined }
 
   if (request.nextUrl.searchParams.get('format') === 'csv') {
     return csvResponse(
-      data.items,
+      items,
       [
         { key: 'name', label: 'Produit' },
         { key: 'sku', label: 'SKU' },
@@ -22,7 +29,7 @@ export async function GET(request: NextRequest) {
         { key: 'store', label: 'Magasin' },
         { key: 'quantity', label: 'Quantité' },
         { key: 'threshold', label: 'Seuil' },
-        { key: 'unitPrice', label: 'Prix unitaire' },
+        ...(admin ? [{ key: 'unitPrice', label: 'Prix unitaire' }] : []),
         { key: 'status', label: 'Statut' },
       ],
       'stock.csv',
@@ -31,6 +38,9 @@ export async function GET(request: NextRequest) {
 
   return NextResponse.json({
     ...data,
+    items,
+    products,
+    summary,
     stores: scopedStoreList(ctx, storeOptions.map((row) => row.name)),
   })
 }

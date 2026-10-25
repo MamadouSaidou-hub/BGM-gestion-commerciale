@@ -9,6 +9,7 @@ import { fetchJson } from '@/lib/fetch-json'
 import { Modal } from '@/components/modal'
 import { LoadError } from '@/components/load-error'
 import { businessConfig } from '@/lib/business-config'
+import { authClient } from '@/lib/auth-client'
 
 type StockItem = {
   productId: number
@@ -18,9 +19,11 @@ type StockItem = {
   store: string
   quantity: number
   threshold: number
-  unitPrice: string
-  unitPriceRaw: number
-  costPriceRaw: number
+  // Absents pour un gestionnaire — l'API ne les renvoie pas du tout dans ce cas (pas juste masqués
+  // côté client), voir app/api/stock/route.ts.
+  unitPrice?: string
+  unitPriceRaw?: number
+  costPriceRaw?: number
   status: 'critical' | 'low' | 'ok'
 }
 
@@ -39,9 +42,9 @@ type StockProduct = {
   name: string
   sku: string
   category: string
-  unitPrice: string
-  unitPriceRaw: number
-  costPriceRaw: number
+  unitPrice?: string
+  unitPriceRaw?: number
+  costPriceRaw?: number
   totalQuantity: number
   status: 'critical' | 'low' | 'ok'
   stores: StoreBreakdown[]
@@ -51,7 +54,7 @@ type StockProduct = {
 type StockData = {
   items: StockItem[]
   products: StockProduct[]
-  summary: { totalArticles: number; totalQuantity: number; lowCount: number; stockValue: string }
+  summary: { totalArticles: number; totalQuantity: number; lowCount: number; stockValue?: string }
   stores: string[]
 }
 
@@ -144,8 +147,8 @@ function NewProductForm({ storeOptions, onCreated }: { storeOptions: StoreOption
 }
 
 function EditPriceForm({ item, onSaved }: { item: StockProduct; onSaved: () => void }) {
-  const [unitPrice, setUnitPrice] = useState(String(item.unitPriceRaw))
-  const [costPrice, setCostPrice] = useState(String(item.costPriceRaw))
+  const [unitPrice, setUnitPrice] = useState(String(item.unitPriceRaw ?? ''))
+  const [costPrice, setCostPrice] = useState(String(item.costPriceRaw ?? ''))
   const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
 
@@ -330,6 +333,8 @@ function StockCountForm({
 }
 
 export function StockView() {
+  const { data: session } = authClient.useSession()
+  const isAdmin = session?.user?.role === 'admin'
   const [store, setStore] = useState('Tous les magasins')
   const searchParams = useSearchParams()
   const [search, setSearch] = useState(() => searchParams.get('q') ?? '')
@@ -409,7 +414,7 @@ export function StockView() {
         <MetricCard label="Articles référencés" value={data ? `${data.summary.totalArticles}` : '—'} icon={Package} tone="navy" />
         <MetricCard label="Quantité totale" value={data ? `${data.summary.totalQuantity}` : '—'} icon={Layers} tone="blue" />
         <MetricCard label="Articles en alerte" value={data ? `${data.summary.lowCount}` : '—'} icon={AlertTriangle} tone="orange" />
-        <MetricCard label="Valeur du stock" value={data ? data.summary.stockValue : '—'} icon={Wallet} tone="green" />
+        {isAdmin && <MetricCard label="Valeur du stock" value={data?.summary.stockValue ?? '—'} icon={Wallet} tone="green" />}
       </section>
 
       <div className="toolbar-panel">
@@ -419,7 +424,7 @@ export function StockView() {
         </div>
         <button className="btn-secondary" onClick={() => setReceptionModalOpen(true)}><PackagePlus size={14} /> Réception stock</button>
         <button className="btn-secondary" onClick={() => setCountModalOpen(true)}><ClipboardCheck size={14} /> Comptage physique</button>
-        <button className="btn-primary" onClick={() => setProductModalOpen(true)}><Plus size={14} /> Nouvel article</button>
+        {isAdmin && <button className="btn-primary" onClick={() => setProductModalOpen(true)}><Plus size={14} /> Nouvel article</button>}
       </div>
 
       <div className="store-card-grid">
@@ -430,7 +435,7 @@ export function StockView() {
               <div><strong>{product.name}</strong><span>{product.sku} · {product.category}</span></div>
             </div>
             <div className="store-card-stats">
-              <div><label><Wallet size={11} style={{ verticalAlign: 'middle', marginRight: 4 }} />Prix unitaire</label><b>{product.unitPrice}</b></div>
+              {isAdmin && <div><label><Wallet size={11} style={{ verticalAlign: 'middle', marginRight: 4 }} />Prix unitaire</label><b>{product.unitPrice}</b></div>}
               <div><label><Layers size={11} style={{ verticalAlign: 'middle', marginRight: 4 }} />Quantité totale</label><b>{product.totalQuantity}</b></div>
               <div><label><Store size={11} style={{ verticalAlign: 'middle', marginRight: 4 }} />Magasins</label><b>{product.stores.length}</b></div>
               <div><label><AlertTriangle size={11} style={{ verticalAlign: 'middle', marginRight: 4 }} />Statut</label><b><span className={`badge ${statusBadge[product.status]}`}>{statusLabel[product.status]}</span></b></div>
@@ -485,7 +490,7 @@ export function StockView() {
       <Modal open={detailProduct !== null} onClose={() => setDetailProduct(null)} title={detailProduct?.name ?? ''} subtitle={detailProduct ? `${detailProduct.sku} · ${detailProduct.category}` : ''} wide>
         {detailProduct && (
           <div style={{ display: 'grid', gap: 22 }}>
-            <EditPriceForm item={detailProduct} onSaved={() => { refresh(); setDetailProduct(null) }} />
+            {isAdmin && <EditPriceForm item={detailProduct} onSaved={() => { refresh(); setDetailProduct(null) }} />}
             <div style={{ display: 'grid', gap: 20, gridTemplateColumns: 'minmax(220px, 1fr) minmax(280px, 2fr)' }}>
               <div>
                 <p className="section-title" style={{ marginBottom: 8 }}>Par magasin</p>
