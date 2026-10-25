@@ -1,8 +1,8 @@
 'use client'
 
-import { Fragment, useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
-import { AlertTriangle, ChevronDown, ChevronRight, ClipboardCheck, Layers, Package, PackagePlus, Plus, Search, Truck, Wallet } from 'lucide-react'
+import { AlertTriangle, ChevronDown, ClipboardCheck, Layers, Package, PackagePlus, Plus, Search, Store, Truck, Wallet } from 'lucide-react'
 import { AppShell } from '@/components/app-shell'
 import { downloadCsv } from '@/lib/download-csv'
 import { fetchJson } from '@/lib/fetch-json'
@@ -175,7 +175,7 @@ function EditPriceForm({ item, onSaved }: { item: StockProduct; onSaved: () => v
   return (
     <form onSubmit={handleSubmit}>
       {error && <p className="form-error">{error}</p>}
-      <p className="section-subtitle">{item.name} ({item.sku})</p>
+      <p className="section-title" style={{ marginBottom: 8 }}>Prix</p>
       <div className="form-row">
         <div className="form-field"><label>Prix de vente (GNF)</label><input required type="number" min="0" value={unitPrice} onChange={(event) => setUnitPrice(event.target.value)} /></div>
         <div className="form-field"><label>Prix de revient (GNF)</label><input required type="number" min="0" value={costPrice} onChange={(event) => setCostPrice(event.target.value)} /></div>
@@ -333,8 +333,7 @@ export function StockView() {
   const [productModalOpen, setProductModalOpen] = useState(false)
   const [receptionModalOpen, setReceptionModalOpen] = useState(false)
   const [countModalOpen, setCountModalOpen] = useState(false)
-  const [editItem, setEditItem] = useState<StockProduct | null>(null)
-  const [expandedProductId, setExpandedProductId] = useState<number | null>(null)
+  const [detailProduct, setDetailProduct] = useState<StockProduct | null>(null)
   const [counts, setCounts] = useState<StockCountRow[]>([])
   const [refreshKey, setRefreshKey] = useState(0)
 
@@ -384,7 +383,6 @@ export function StockView() {
     setProductModalOpen(false)
     setReceptionModalOpen(false)
     setCountModalOpen(false)
-    setEditItem(null)
     setRefreshKey((key) => key + 1)
   }
 
@@ -416,94 +414,22 @@ export function StockView() {
         <button className="btn-primary" onClick={() => setProductModalOpen(true)}><Plus size={14} /> Nouvel article</button>
       </div>
 
-      <div className="table-panel">
-        <div className="table-scroll">
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th></th>
-                <th>Produit</th>
-                <th>SKU</th>
-                <th>Catégorie</th>
-                <th>Magasins</th>
-                <th>Quantité totale</th>
-                <th>Prix unitaire</th>
-                <th>Statut</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredProducts.map((product) => {
-                const isOpen = expandedProductId === product.productId
-                return (
-                  <Fragment key={product.productId}>
-                    <tr className="clickable-row" onClick={() => setExpandedProductId(isOpen ? null : product.productId)}>
-                      <td style={{ width: 24 }}>{isOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}</td>
-                      <td data-label="Produit"><strong>{product.name}</strong></td>
-                      <td data-label="SKU">{product.sku}</td>
-                      <td data-label="Catégorie">{product.category}</td>
-                      <td data-label="Magasins">{product.stores.length}</td>
-                      <td data-label="Quantité totale">{product.totalQuantity}</td>
-                      <td data-label="Prix unitaire">{product.unitPrice}</td>
-                      <td data-label="Statut"><span className={`badge ${statusBadge[product.status]}`}>{statusLabel[product.status]}</span></td>
-                      <td data-label="Action">
-                        <button className="btn-ghost" onClick={(event) => { event.stopPropagation(); setEditItem(product) }}>Prix</button>
-                      </td>
-                    </tr>
-                    {isOpen && (
-                      <tr>
-                        <td colSpan={9} style={{ background: 'var(--background)', padding: '16px 20px' }}>
-                          <div style={{ display: 'grid', gap: 20, gridTemplateColumns: 'minmax(220px, 1fr) minmax(280px, 2fr)' }}>
-                            <div>
-                              <p className="section-title" style={{ marginBottom: 8 }}>Par magasin</p>
-                              <table className="data-table">
-                                <thead><tr><th>Magasin</th><th>Qté</th><th>Seuil</th><th>Statut</th></tr></thead>
-                                <tbody>
-                                  {product.stores.map((s) => (
-                                    <tr key={s.store}>
-                                      <td data-label="Magasin">{s.store}</td>
-                                      <td data-label="Qté">{s.quantity}</td>
-                                      <td data-label="Seuil">{s.threshold}</td>
-                                      <td data-label="Statut"><span className={`badge ${statusBadge[s.status]}`}>{statusLabel[s.status]}</span></td>
-                                    </tr>
-                                  ))}
-                                </tbody>
-                              </table>
-                            </div>
-                            <div>
-                              <p className="section-title" style={{ marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
-                                <Truck size={13} /> Historique fournisseurs
-                              </p>
-                              {product.deliveries.length === 0 ? (
-                                <p className="table-empty">Aucune livraison enregistrée pour ce produit.</p>
-                              ) : (
-                                <table className="data-table">
-                                  <thead><tr><th>Date</th><th>Fournisseur</th><th>Magasin</th><th>Qté</th><th>Montant</th></tr></thead>
-                                  <tbody>
-                                    {product.deliveries.map((d, index) => (
-                                      <tr key={index}>
-                                        <td data-label="Date">{new Date(d.createdAt).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' })}</td>
-                                        <td data-label="Fournisseur">{d.supplierName}</td>
-                                        <td data-label="Magasin">{d.store}</td>
-                                        <td data-label="Qté">{d.sackCount}{d.tonnage ? ` (${d.tonnage} t)` : ''}</td>
-                                        <td data-label="Montant">{d.totalAmountFormatted}</td>
-                                      </tr>
-                                    ))}
-                                  </tbody>
-                                </table>
-                              )}
-                            </div>
-                          </div>
-                        </td>
-                      </tr>
-                    )}
-                  </Fragment>
-                )
-              })}
-            </tbody>
-          </table>
-          {!loading && filteredProducts.length === 0 && <p className="table-empty">Aucun article ne correspond à votre recherche.</p>}
-        </div>
+      <div className="store-card-grid">
+        {filteredProducts.map((product) => (
+          <article className="store-card clickable-row" key={product.productId} onClick={() => setDetailProduct(product)}>
+            <div className="store-card-head">
+              <span className="store-card-icon"><Package aria-hidden="true" /></span>
+              <div><strong>{product.name}</strong><span>{product.sku} · {product.category}</span></div>
+            </div>
+            <div className="store-card-stats">
+              <div><label><Wallet size={11} style={{ verticalAlign: 'middle', marginRight: 4 }} />Prix unitaire</label><b>{product.unitPrice}</b></div>
+              <div><label><Layers size={11} style={{ verticalAlign: 'middle', marginRight: 4 }} />Quantité totale</label><b>{product.totalQuantity}</b></div>
+              <div><label><Store size={11} style={{ verticalAlign: 'middle', marginRight: 4 }} />Magasins</label><b>{product.stores.length}</b></div>
+              <div><label><AlertTriangle size={11} style={{ verticalAlign: 'middle', marginRight: 4 }} />Statut</label><b><span className={`badge ${statusBadge[product.status]}`}>{statusLabel[product.status]}</span></b></div>
+            </div>
+          </article>
+        ))}
+        {!loading && filteredProducts.length === 0 && <p className="table-empty">Aucun article ne correspond à votre recherche.</p>}
       </div>
 
       {counts.length > 0 && (
@@ -548,8 +474,53 @@ export function StockView() {
       <Modal open={receptionModalOpen} onClose={() => setReceptionModalOpen(false)} title="Réception stock" subtitle="Enregistrez l’arrivée d’articles dans un magasin.">
         <StockReceptionForm storeOptions={storeOptions} productOptions={productOptions} onCreated={refresh} />
       </Modal>
-      <Modal open={editItem !== null} onClose={() => setEditItem(null)} title="Modifier les prix" subtitle="Ajustez le prix de vente et le prix de revient de l’article.">
-        {editItem && <EditPriceForm item={editItem} onSaved={refresh} />}
+      <Modal open={detailProduct !== null} onClose={() => setDetailProduct(null)} title={detailProduct?.name ?? ''} subtitle={detailProduct ? `${detailProduct.sku} · ${detailProduct.category}` : ''} wide>
+        {detailProduct && (
+          <div style={{ display: 'grid', gap: 22 }}>
+            <EditPriceForm item={detailProduct} onSaved={() => { refresh(); setDetailProduct(null) }} />
+            <div style={{ display: 'grid', gap: 20, gridTemplateColumns: 'minmax(220px, 1fr) minmax(280px, 2fr)' }}>
+              <div>
+                <p className="section-title" style={{ marginBottom: 8 }}>Par magasin</p>
+                <table className="data-table">
+                  <thead><tr><th>Magasin</th><th>Qté</th><th>Seuil</th><th>Statut</th></tr></thead>
+                  <tbody>
+                    {detailProduct.stores.map((s) => (
+                      <tr key={s.store}>
+                        <td data-label="Magasin">{s.store}</td>
+                        <td data-label="Qté">{s.quantity}</td>
+                        <td data-label="Seuil">{s.threshold}</td>
+                        <td data-label="Statut"><span className={`badge ${statusBadge[s.status]}`}>{statusLabel[s.status]}</span></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <div>
+                <p className="section-title" style={{ marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <Truck size={13} /> Historique fournisseurs
+                </p>
+                {detailProduct.deliveries.length === 0 ? (
+                  <p className="table-empty">Aucune livraison enregistrée pour ce produit.</p>
+                ) : (
+                  <table className="data-table">
+                    <thead><tr><th>Date</th><th>Fournisseur</th><th>Magasin</th><th>Qté</th><th>Montant</th></tr></thead>
+                    <tbody>
+                      {detailProduct.deliveries.map((d, index) => (
+                        <tr key={index}>
+                          <td data-label="Date">{new Date(d.createdAt).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' })}</td>
+                          <td data-label="Fournisseur">{d.supplierName}</td>
+                          <td data-label="Magasin">{d.store}</td>
+                          <td data-label="Qté">{d.sackCount}{d.tonnage ? ` (${d.tonnage} t)` : ''}</td>
+                          <td data-label="Montant">{d.totalAmountFormatted}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
       </Modal>
     </AppShell>
   )
