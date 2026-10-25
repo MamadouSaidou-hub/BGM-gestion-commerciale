@@ -1,8 +1,8 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { Fragment, useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
-import { AlertTriangle, ChevronDown, ClipboardCheck, Layers, Package, PackagePlus, Plus, Search, Wallet } from 'lucide-react'
+import { AlertTriangle, ChevronDown, ChevronRight, ClipboardCheck, Layers, Package, PackagePlus, Plus, Search, Truck, Wallet } from 'lucide-react'
 import { AppShell } from '@/components/app-shell'
 import { downloadCsv } from '@/lib/download-csv'
 import { fetchJson } from '@/lib/fetch-json'
@@ -24,8 +24,33 @@ type StockItem = {
   status: 'critical' | 'low' | 'ok'
 }
 
+type StoreBreakdown = { store: string; quantity: number; threshold: number; status: 'critical' | 'low' | 'ok' }
+type SupplierDelivery = {
+  supplierName: string
+  store: string
+  sackCount: number
+  tonnage: number | null
+  totalAmountFormatted: string
+  reference: string | null
+  createdAt: string
+}
+type StockProduct = {
+  productId: number
+  name: string
+  sku: string
+  category: string
+  unitPrice: string
+  unitPriceRaw: number
+  costPriceRaw: number
+  totalQuantity: number
+  status: 'critical' | 'low' | 'ok'
+  stores: StoreBreakdown[]
+  deliveries: SupplierDelivery[]
+}
+
 type StockData = {
   items: StockItem[]
+  products: StockProduct[]
   summary: { totalArticles: number; totalQuantity: number; lowCount: number; stockValue: string }
   stores: string[]
 }
@@ -118,7 +143,7 @@ function NewProductForm({ storeOptions, onCreated }: { storeOptions: StoreOption
   )
 }
 
-function EditPriceForm({ item, onSaved }: { item: StockItem; onSaved: () => void }) {
+function EditPriceForm({ item, onSaved }: { item: StockProduct; onSaved: () => void }) {
   const [unitPrice, setUnitPrice] = useState(String(item.unitPriceRaw))
   const [costPrice, setCostPrice] = useState(String(item.costPriceRaw))
   const [error, setError] = useState('')
@@ -308,7 +333,8 @@ export function StockView() {
   const [productModalOpen, setProductModalOpen] = useState(false)
   const [receptionModalOpen, setReceptionModalOpen] = useState(false)
   const [countModalOpen, setCountModalOpen] = useState(false)
-  const [editItem, setEditItem] = useState<StockItem | null>(null)
+  const [editItem, setEditItem] = useState<StockProduct | null>(null)
+  const [expandedProductId, setExpandedProductId] = useState<number | null>(null)
   const [counts, setCounts] = useState<StockCountRow[]>([])
   const [refreshKey, setRefreshKey] = useState(0)
 
@@ -345,11 +371,13 @@ export function StockView() {
   }, [store, refreshKey])
 
   const stores = data?.stores ?? ['Tous les magasins']
-  const filteredItems = useMemo(() => {
-    const items = data?.items ?? []
+  const filteredProducts = useMemo(() => {
+    const productList = data?.products ?? []
     const query = search.trim().toLowerCase()
-    if (!query) return items
-    return items.filter((item) => item.name.toLowerCase().includes(query) || item.sku.toLowerCase().includes(query) || item.category.toLowerCase().includes(query))
+    if (!query) return productList
+    return productList.filter(
+      (product) => product.name.toLowerCase().includes(query) || product.sku.toLowerCase().includes(query) || product.category.toLowerCase().includes(query),
+    )
   }, [data, search])
 
   function refresh() {
@@ -393,34 +421,88 @@ export function StockView() {
           <table className="data-table">
             <thead>
               <tr>
+                <th></th>
                 <th>Produit</th>
                 <th>SKU</th>
                 <th>Catégorie</th>
-                <th>Magasin</th>
-                <th>Quantité</th>
-                <th>Seuil</th>
+                <th>Magasins</th>
+                <th>Quantité totale</th>
                 <th>Prix unitaire</th>
                 <th>Statut</th>
                 <th></th>
               </tr>
             </thead>
             <tbody>
-              {filteredItems.map((item) => (
-                <tr key={`${item.sku}-${item.store}`}>
-                  <td data-label="Produit">{item.name}</td>
-                  <td data-label="SKU">{item.sku}</td>
-                  <td data-label="Catégorie">{item.category}</td>
-                  <td data-label="Magasin">{item.store}</td>
-                  <td data-label="Quantité">{item.quantity}</td>
-                  <td data-label="Seuil">{item.threshold}</td>
-                  <td data-label="Prix unitaire">{item.unitPrice}</td>
-                  <td data-label="Statut"><span className={`badge ${statusBadge[item.status]}`}>{statusLabel[item.status]}</span></td>
-                  <td data-label="Action"><button className="btn-ghost" onClick={() => setEditItem(item)}>Prix</button></td>
-                </tr>
-              ))}
+              {filteredProducts.map((product) => {
+                const isOpen = expandedProductId === product.productId
+                return (
+                  <Fragment key={product.productId}>
+                    <tr className="clickable-row" onClick={() => setExpandedProductId(isOpen ? null : product.productId)}>
+                      <td style={{ width: 24 }}>{isOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}</td>
+                      <td data-label="Produit"><strong>{product.name}</strong></td>
+                      <td data-label="SKU">{product.sku}</td>
+                      <td data-label="Catégorie">{product.category}</td>
+                      <td data-label="Magasins">{product.stores.length}</td>
+                      <td data-label="Quantité totale">{product.totalQuantity}</td>
+                      <td data-label="Prix unitaire">{product.unitPrice}</td>
+                      <td data-label="Statut"><span className={`badge ${statusBadge[product.status]}`}>{statusLabel[product.status]}</span></td>
+                      <td data-label="Action">
+                        <button className="btn-ghost" onClick={(event) => { event.stopPropagation(); setEditItem(product) }}>Prix</button>
+                      </td>
+                    </tr>
+                    {isOpen && (
+                      <tr>
+                        <td colSpan={9} style={{ background: 'var(--background)', padding: '16px 20px' }}>
+                          <div style={{ display: 'grid', gap: 20, gridTemplateColumns: 'minmax(220px, 1fr) minmax(280px, 2fr)' }}>
+                            <div>
+                              <p className="section-title" style={{ marginBottom: 8 }}>Par magasin</p>
+                              <table className="data-table">
+                                <thead><tr><th>Magasin</th><th>Qté</th><th>Seuil</th><th>Statut</th></tr></thead>
+                                <tbody>
+                                  {product.stores.map((s) => (
+                                    <tr key={s.store}>
+                                      <td data-label="Magasin">{s.store}</td>
+                                      <td data-label="Qté">{s.quantity}</td>
+                                      <td data-label="Seuil">{s.threshold}</td>
+                                      <td data-label="Statut"><span className={`badge ${statusBadge[s.status]}`}>{statusLabel[s.status]}</span></td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                            <div>
+                              <p className="section-title" style={{ marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
+                                <Truck size={13} /> Historique fournisseurs
+                              </p>
+                              {product.deliveries.length === 0 ? (
+                                <p className="table-empty">Aucune livraison enregistrée pour ce produit.</p>
+                              ) : (
+                                <table className="data-table">
+                                  <thead><tr><th>Date</th><th>Fournisseur</th><th>Magasin</th><th>Qté</th><th>Montant</th></tr></thead>
+                                  <tbody>
+                                    {product.deliveries.map((d, index) => (
+                                      <tr key={index}>
+                                        <td data-label="Date">{new Date(d.createdAt).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' })}</td>
+                                        <td data-label="Fournisseur">{d.supplierName}</td>
+                                        <td data-label="Magasin">{d.store}</td>
+                                        <td data-label="Qté">{d.sackCount}{d.tonnage ? ` (${d.tonnage} t)` : ''}</td>
+                                        <td data-label="Montant">{d.totalAmountFormatted}</td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              )}
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </Fragment>
+                )
+              })}
             </tbody>
           </table>
-          {!loading && filteredItems.length === 0 && <p className="table-empty">Aucun article ne correspond à votre recherche.</p>}
+          {!loading && filteredProducts.length === 0 && <p className="table-empty">Aucun article ne correspond à votre recherche.</p>}
         </div>
       </div>
 
