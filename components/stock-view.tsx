@@ -227,6 +227,10 @@ function StockReceptionForm({ storeOptions, productOptions, onCreated }: { store
   return (
     <form onSubmit={handleSubmit}>
       {error && <p className="form-error">{error}</p>}
+      <p className="section-subtitle">
+        Pour une livraison d’un fournisseur enregistré (dette, paiement, historique), utilisez plutôt{' '}
+        <strong>Fournisseurs → Livraison</strong>. Ce formulaire-ci ajoute juste une quantité au stock, sans lien fournisseur — utile pour un retour, une correction, ou un apport hors fournisseur suivi.
+      </p>
       <div className="form-field">
         <label>Article</label>
         <select required value={productId} onChange={(event) => setProductId(event.target.value)}>
@@ -242,7 +246,7 @@ function StockReceptionForm({ storeOptions, productOptions, onCreated }: { store
         </div>
         <div className="form-field"><label>Quantité reçue</label><input required type="number" min="1" value={quantity} onChange={(event) => setQuantity(event.target.value)} /></div>
       </div>
-      <div className="form-field"><label>Référence (optionnel)</label><input value={reference} onChange={(event) => setReference(event.target.value)} placeholder="BL fournisseur..." /></div>
+      <div className="form-field"><label>Référence (optionnel)</label><input value={reference} onChange={(event) => setReference(event.target.value)} placeholder="Ex : bon de retour, note interne..." /></div>
       <div className="form-actions"><button type="submit" className="btn-primary" disabled={submitting}>{submitting ? 'Enregistrement...' : 'Enregistrer la réception'}</button></div>
     </form>
   )
@@ -302,6 +306,10 @@ function StockCountForm({
   return (
     <form onSubmit={handleSubmit}>
       {error && <p className="form-error">{error}</p>}
+      <p className="section-subtitle">
+        Remplace la quantité système par ce que vous avez réellement compté dans le magasin — contrairement à une réception,
+        qui s’ajoute au stock existant. L’écart (vol, erreur, casse non enregistrée...) est automatiquement calculé et tracé.
+      </p>
       <div className="form-field">
         <label>Article</label>
         <select required value={productId} onChange={(event) => setProductId(event.target.value)}>
