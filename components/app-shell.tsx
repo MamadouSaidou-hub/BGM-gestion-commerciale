@@ -32,7 +32,7 @@ const navItems = [
   { href: '/', label: 'Tableau de bord', icon: LayoutDashboard, adminOnly: false },
   { href: '/ventes', label: 'Ventes', icon: ShoppingCart, adminOnly: false },
   { href: '/stock', label: 'Stock', icon: Package, adminOnly: false },
-  { href: '/transferts', label: 'Transferts', icon: ArrowLeftRight, adminOnly: false },
+  { href: '/transferts', label: 'Transferts', icon: ArrowLeftRight, adminOnly: true },
   { href: '/tresorerie', label: 'Trésorerie', icon: WalletCards, adminOnly: true },
 ]
 

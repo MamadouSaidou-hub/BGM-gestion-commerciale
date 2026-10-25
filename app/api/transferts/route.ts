@@ -9,6 +9,7 @@ import { csvResponse } from '@/lib/csv'
 export async function GET(request: NextRequest) {
   const ctx = await getSessionContext()
   if (!ctx) return NextResponse.json({ error: 'Non authentifié.' }, { status: 401 })
+  if (!isAdmin(ctx)) return NextResponse.json({ error: 'Réservé aux administrateurs.' }, { status: 403 })
 
   const searchParams = request.nextUrl.searchParams
   const period = parsePeriodLabel(searchParams.get('period'), '7d')
@@ -40,6 +41,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   const ctx = await getSessionContext()
   if (!ctx) return NextResponse.json({ error: 'Non authentifié.' }, { status: 401 })
+  if (!isAdmin(ctx)) return NextResponse.json({ error: 'Réservé aux administrateurs.' }, { status: 403 })
 
   const body = await request.json()
   const fromStoreId = Number(body.fromStoreId)
@@ -48,10 +50,6 @@ export async function POST(request: NextRequest) {
 
   if (!Number.isFinite(fromStoreId) || !Number.isFinite(toStoreId) || items.length === 0) {
     return NextResponse.json({ error: 'Champs invalides ou manquants.' }, { status: 400 })
-  }
-
-  if (!isAdmin(ctx) && ctx.storeId !== fromStoreId) {
-    return NextResponse.json({ error: 'Vous ne pouvez initier un transfert que depuis votre propre magasin.' }, { status: 403 })
   }
 
   const parsedItems = items.map((item: { productId: unknown; quantity: unknown }) => ({

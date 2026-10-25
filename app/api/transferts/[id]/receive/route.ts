@@ -9,6 +9,7 @@ import { getSessionContext, isAdmin } from '@/lib/session'
 export async function POST(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   const ctx = await getSessionContext()
   if (!ctx) return NextResponse.json({ error: 'Non authentifié.' }, { status: 401 })
+  if (!isAdmin(ctx)) return NextResponse.json({ error: 'Réservé aux administrateurs.' }, { status: 403 })
 
   const { id } = await params
   const transferId = Number(id)
@@ -20,10 +21,6 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
   const [transfer] = await db.select().from(transfers).where(eq(transfers.id, transferId))
   if (!transfer) {
     return NextResponse.json({ error: 'Transfert introuvable.' }, { status: 404 })
-  }
-
-  if (!isAdmin(ctx) && ctx.storeId !== transfer.toStoreId) {
-    return NextResponse.json({ error: 'Seul le magasin destinataire peut confirmer la réception.' }, { status: 403 })
   }
 
   try {
