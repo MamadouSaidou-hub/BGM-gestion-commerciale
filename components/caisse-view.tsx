@@ -7,16 +7,19 @@ import { Modal } from '@/components/modal'
 import { LoadError } from '@/components/load-error'
 import { fetchJson } from '@/lib/fetch-json'
 import { downloadCsv } from '@/lib/download-csv'
+import { EXPENSE_CATEGORIES } from '@/lib/expense-categories'
 
 const periods = ['Aujourd’hui', '7 derniers jours', 'Ce mois-ci']
 
 type CashAccountType = 'cash' | 'bank' | 'mobile_money' | 'other'
 type CashAccount = { id: number; name: string; type: CashAccountType; balance: number; balanceFormatted: string; isDefault: boolean }
 type Movement = { id: number; date: string; account: string; type: 'expense' | 'deposit'; category: string; description: string | null; amountFormatted: string }
+type ExpenseBreakdownRow = { category: string; amount: number; amountFormatted: string; pct: number }
 type CaisseData = {
   accounts: CashAccount[]
   movements: Movement[]
   summary: { totalBalance: string; totalExpenses: string; totalDeposits: string; accountCount: number }
+  expenseBreakdown: ExpenseBreakdownRow[]
 }
 
 const typeLabel: Record<CashAccountType, string> = { cash: 'Espèces', bank: 'Banque', mobile_money: 'Mobile Money', other: 'Autre' }
@@ -30,6 +33,22 @@ function MetricCard({ label, value, icon: Icon, tone }: { label: string; value: 
       <p className="metric-label">{label}</p>
       <p className="metric-value">{value}</p>
     </article>
+  )
+}
+
+const breakdownColors = ['var(--primary)', 'var(--orange)', 'var(--blue)', 'var(--green)', '#a68af0', 'var(--red)']
+
+function ExpenseBreakdownBar({ row, max, color }: { row: ExpenseBreakdownRow; max: number; color: string }) {
+  const pct = max > 0 ? Math.max((row.amount / max) * 100, 2) : 0
+  return (
+    <div className="rank-bar-row">
+      <span className="rank-bar-label" title={row.category}>{row.category}</span>
+      <div className="rank-bar-track"><div className="rank-bar-fill" style={{ width: `${pct}%`, background: color }} /></div>
+      <span className="rank-bar-value">
+        {row.amountFormatted}
+        <span style={{ display: 'block', fontSize: 10, color: 'var(--faint)', fontWeight: 400 }}>{row.pct.toFixed(1).replace('.', ',')} %</span>
+      </span>
+    </div>
   )
 }
 
@@ -96,6 +115,11 @@ function NewMovementForm({ type, accounts, onCreated }: { type: 'expense' | 'dep
     if (!cashAccountId && accounts.length > 0) setCashAccountId(String(accounts[0].id))
   }, [accounts, cashAccountId])
 
+  useEffect(() => {
+    if (type === 'expense' && !category) setCategory(EXPENSE_CATEGORIES[0])
+    if (type === 'deposit' && EXPENSE_CATEGORIES.includes(category as (typeof EXPENSE_CATEGORIES)[number])) setCategory('')
+  }, [type, category])
+
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault()
     setError('')
@@ -130,7 +154,16 @@ function NewMovementForm({ type, accounts, onCreated }: { type: 'expense' | 'dep
       </div>
       <div className="form-row">
         <div className="form-field"><label>Montant (GNF)</label><input required type="number" min="1" value={amount} onChange={(event) => setAmount(event.target.value)} /></div>
-        <div className="form-field"><label>Motif</label><input required value={category} onChange={(event) => setCategory(event.target.value)} placeholder={type === 'expense' ? 'Ex : Loyer, Salaires, Transport...' : 'Ex : Vente comptant, Apport...'} /></div>
+        <div className="form-field">
+          <label>Motif</label>
+          {type === 'expense' ? (
+            <select required value={category} onChange={(event) => setCategory(event.target.value)}>
+              {EXPENSE_CATEGORIES.map((option) => <option key={option} value={option}>{option}</option>)}
+            </select>
+          ) : (
+            <input required value={category} onChange={(event) => setCategory(event.target.value)} placeholder="Ex : Vente comptant, Apport..." />
+          )}
+        </div>
       </div>
       <div className="form-field"><label>Description (optionnel)</label><input value={description} onChange={(event) => setDescription(event.target.value)} /></div>
       <div className="form-actions">
@@ -273,6 +306,31 @@ export function CaisseView() {
         <button className="btn-secondary" onClick={() => setDepositModalOpen(true)} disabled={accounts.length === 0}><ArrowUpCircle size={14} /> Nouveau dépôt</button>
         <button className="btn-primary" onClick={() => setExpenseModalOpen(true)} disabled={accounts.length === 0}><ArrowDownCircle size={14} /> Nouvelle dépense</button>
       </div>
+
+      <section className="dashboard-grid" style={{ gridTemplateColumns: '1fr', marginBottom: 16 }}>
+        <article className="panel">
+          <div className="panel-header">
+            <div>
+              <h2>Répartition des dépenses par catégorie</h2>
+              <p>Où part l’argent sur la période sélectionnée — pour repérer ce qui pèse le plus et décider où économiser.</p>
+            </div>
+          </div>
+          <div style={{ marginTop: 14 }}>
+            {(data?.expenseBreakdown.length ?? 0) > 0 ? (
+              data!.expenseBreakdown.map((row, index) => (
+                <ExpenseBreakdownBar
+                  key={row.category}
+                  row={row}
+                  max={data!.expenseBreakdown[0].amount}
+                  color={breakdownColors[index % breakdownColors.length]}
+                />
+              ))
+            ) : (
+              !loading && <p className="table-empty">Aucune dépense enregistrée sur cette période.</p>
+            )}
+          </div>
+        </article>
+      </section>
 
       {accounts.length > 0 && (
         <div className="store-card-grid" style={{ marginBottom: 16 }}>

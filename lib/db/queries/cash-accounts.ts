@@ -31,6 +31,24 @@ export async function getCashAccountsOverview(period: PeriodKey) {
   const totalExpenses = movementRows.filter((row) => row.type === 'expense').reduce((sum, row) => sum + row.amount, 0)
   const totalDeposits = movementRows.filter((row) => row.type === 'deposit').reduce((sum, row) => sum + row.amount, 0)
 
+  // "Transfert interne" (caisse-to-caisse) is money moving between the business's own accounts,
+  // not a real cost — included it would inflate the breakdown with a fake "where did the money go"
+  // answer. Everything else here comes from the fixed EXPENSE_CATEGORIES list (lib/expense-categories.ts).
+  const realExpenses = movementRows.filter((row) => row.type === 'expense' && row.category !== 'Transfert interne')
+  const realExpensesTotal = realExpenses.reduce((sum, row) => sum + row.amount, 0)
+  const byCategory = new Map<string, number>()
+  for (const row of realExpenses) {
+    byCategory.set(row.category, (byCategory.get(row.category) ?? 0) + row.amount)
+  }
+  const expenseBreakdown = [...byCategory.entries()]
+    .map(([category, amount]) => ({
+      category,
+      amount,
+      amountFormatted: formatFcfa(amount),
+      pct: realExpensesTotal > 0 ? (amount / realExpensesTotal) * 100 : 0,
+    }))
+    .sort((a, b) => b.amount - a.amount)
+
   return {
     accounts: accountRows.map((row) => ({
       id: row.id,
@@ -55,6 +73,7 @@ export async function getCashAccountsOverview(period: PeriodKey) {
       totalDeposits: formatFcfa(totalDeposits),
       accountCount: accountRows.length,
     },
+    expenseBreakdown,
   }
 }
 
