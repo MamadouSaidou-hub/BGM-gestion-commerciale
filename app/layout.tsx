@@ -3,6 +3,7 @@ import type { Metadata, Viewport } from 'next'
 import { Inter } from 'next/font/google'
 import './globals.css'
 import { companyInfo } from '@/lib/company-info'
+import { PwaUpdateWatcher } from '@/components/pwa-update-watcher'
 
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter', display: 'swap' })
 
@@ -48,6 +49,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
       </head>
       <body className="antialiased">
+        <PwaUpdateWatcher />
         {children}
         {process.env.NODE_ENV === 'production' && <Analytics />}
       </body>
