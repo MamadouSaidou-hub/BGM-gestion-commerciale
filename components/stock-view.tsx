@@ -8,6 +8,7 @@ import { downloadCsv } from '@/lib/download-csv'
 import { fetchJson } from '@/lib/fetch-json'
 import { Modal } from '@/components/modal'
 import { LoadError } from '@/components/load-error'
+import { SkeletonCards } from '@/components/skeleton'
 import { businessConfig } from '@/lib/business-config'
 import { authClient } from '@/lib/auth-client'
 
@@ -348,6 +349,7 @@ export function StockView() {
   const [countModalOpen, setCountModalOpen] = useState(false)
   const [detailProduct, setDetailProduct] = useState<StockProduct | null>(null)
   const [counts, setCounts] = useState<StockCountRow[]>([])
+  const [statusFilter, setStatusFilter] = useState<'all' | StockProduct['status']>('all')
   const [refreshKey, setRefreshKey] = useState(0)
 
   useEffect(() => {
@@ -384,13 +386,14 @@ export function StockView() {
 
   const stores = data?.stores ?? ['Tous les magasins']
   const filteredProducts = useMemo(() => {
-    const productList = data?.products ?? []
+    let productList = data?.products ?? []
+    if (statusFilter !== 'all') productList = productList.filter((product) => product.status === statusFilter)
     const query = search.trim().toLowerCase()
     if (!query) return productList
     return productList.filter(
       (product) => product.name.toLowerCase().includes(query) || product.sku.toLowerCase().includes(query) || product.category.toLowerCase().includes(query),
     )
-  }, [data, search])
+  }, [data, search, statusFilter])
 
   function refresh() {
     setProductModalOpen(false)
@@ -411,10 +414,14 @@ export function StockView() {
       {error && <LoadError message={error} onRetry={() => setRefreshKey((key) => key + 1)} />}
 
       <section className="metrics-grid" aria-label="Indicateurs stock">
-        <MetricCard label="Articles référencés" value={data ? `${data.summary.totalArticles}` : '—'} icon={Package} tone="navy" />
-        <MetricCard label="Quantité totale" value={data ? `${data.summary.totalQuantity}` : '—'} icon={Layers} tone="blue" />
-        <MetricCard label="Articles en alerte" value={data ? `${data.summary.lowCount}` : '—'} icon={AlertTriangle} tone="orange" />
-        {isAdmin && <MetricCard label="Valeur du stock" value={data?.summary.stockValue ?? '—'} icon={Wallet} tone="green" />}
+        {loading ? <SkeletonCards count={4} /> : (
+          <>
+            <MetricCard label="Articles référencés" value={data ? `${data.summary.totalArticles}` : '—'} icon={Package} tone="navy" />
+            <MetricCard label="Quantité totale" value={data ? `${data.summary.totalQuantity}` : '—'} icon={Layers} tone="blue" />
+            <MetricCard label="Articles en alerte" value={data ? `${data.summary.lowCount}` : '—'} icon={AlertTriangle} tone="orange" />
+            {isAdmin && <MetricCard label="Valeur du stock" value={data?.summary.stockValue ?? '—'} icon={Wallet} tone="green" />}
+          </>
+        )}
       </section>
 
       <div className="toolbar-panel">
@@ -427,8 +434,26 @@ export function StockView() {
         {isAdmin && <button className="btn-primary" onClick={() => setProductModalOpen(true)}><Plus size={14} /> Nouvel article</button>}
       </div>
 
+      <div className="filter-chip-row" role="group" aria-label="Filtrer par statut">
+        <button type="button" className={`filter-chip ${statusFilter === 'all' ? 'active' : ''}`} onClick={() => setStatusFilter('all')}>Tous</button>
+        <button type="button" className={`filter-chip ${statusFilter === 'critical' ? 'active' : ''}`} onClick={() => setStatusFilter('critical')}>Critique</button>
+        <button type="button" className={`filter-chip ${statusFilter === 'low' ? 'active' : ''}`} onClick={() => setStatusFilter('low')}>Faible</button>
+        <button type="button" className={`filter-chip ${statusFilter === 'ok' ? 'active' : ''}`} onClick={() => setStatusFilter('ok')}>OK</button>
+      </div>
+
       <div className="store-card-grid">
-        {filteredProducts.map((product) => (
+        {loading && Array.from({ length: 6 }).map((_, index) => (
+          <article className="store-card skeleton-card" key={index}>
+            <div className="store-card-head">
+              <span className="skeleton-block" style={{ width: 36, height: 36, borderRadius: 9 }} />
+              <div style={{ flex: 1 }}>
+                <span className="skeleton-block" style={{ width: '70%', height: 13 }} />
+                <span className="skeleton-block" style={{ width: '50%', height: 10, marginTop: 6 }} />
+              </div>
+            </div>
+          </article>
+        ))}
+        {!loading && filteredProducts.map((product) => (
           <article className="store-card clickable-row" key={product.productId} onClick={() => setDetailProduct(product)}>
             <div className="store-card-head">
               <span className="store-card-icon"><Package aria-hidden="true" /></span>

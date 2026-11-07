@@ -14,6 +14,7 @@ import {
   Menu,
   Package,
   ReceiptText,
+  RefreshCw,
   Search,
   ShoppingCart,
   Store,
@@ -250,6 +251,52 @@ export function AppShell({
   const { data: session } = authClient.useSession()
   const isAdmin = session?.user?.role === 'admin'
 
+  // Pull-to-refresh: a plain, unconditional full reload rather than a per-page silent refetch —
+  // every page manages its own data independently, so wiring a real refetch callback through all
+  // the views for a marginal gain isn't worth it. A reload is near-instant on this app regardless.
+  const [pullDistance, setPullDistance] = useState(0)
+  const [refreshing, setRefreshing] = useState(false)
+  const touchStartY = useRef<number | null>(null)
+  const pullDistanceRef = useRef(0)
+
+  useEffect(() => {
+    function onTouchStart(event: TouchEvent) {
+      touchStartY.current = window.scrollY <= 0 ? event.touches[0].clientY : null
+    }
+    function onTouchMove(event: TouchEvent) {
+      if (touchStartY.current === null) return
+      const delta = event.touches[0].clientY - touchStartY.current
+      if (delta <= 0 || window.scrollY > 0) {
+        touchStartY.current = null
+        pullDistanceRef.current = 0
+        setPullDistance(0)
+        return
+      }
+      const next = Math.min(delta * 0.5, 80)
+      pullDistanceRef.current = next
+      setPullDistance(next)
+    }
+    function onTouchEnd() {
+      if (touchStartY.current === null) return
+      touchStartY.current = null
+      if (pullDistanceRef.current > 60) {
+        setRefreshing(true)
+        window.location.reload()
+      } else {
+        pullDistanceRef.current = 0
+        setPullDistance(0)
+      }
+    }
+    window.addEventListener('touchstart', onTouchStart, { passive: true })
+    window.addEventListener('touchmove', onTouchMove, { passive: true })
+    window.addEventListener('touchend', onTouchEnd)
+    return () => {
+      window.removeEventListener('touchstart', onTouchStart)
+      window.removeEventListener('touchmove', onTouchMove)
+      window.removeEventListener('touchend', onTouchEnd)
+    }
+  }, [])
+
   return (
     <div className="app-frame">
       <aside className={`sidebar ${menuOpen ? 'sidebar-open' : ''}`}>
@@ -291,6 +338,10 @@ export function AppShell({
           </div>
         </header>
 
+        <div className={`pull-refresh-indicator ${pullDistance > 10 || refreshing ? 'visible' : ''}`} style={{ height: refreshing ? 44 : Math.min(pullDistance, 44) }}>
+          <RefreshCw size={14} />
+          <span>{refreshing ? 'Actualisation...' : 'Relâchez pour actualiser'}</span>
+        </div>
         <div className="page-body">{children}</div>
       </main>
     </div>

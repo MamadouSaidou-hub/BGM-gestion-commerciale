@@ -5,6 +5,7 @@ import { ChevronDown, CreditCard, Plus, Receipt, Search, ShoppingCart, Trash2, W
 import { AppShell } from '@/components/app-shell'
 import { Modal } from '@/components/modal'
 import { LoadError } from '@/components/load-error'
+import { SkeletonCards, SkeletonRows } from '@/components/skeleton'
 import { downloadCsv } from '@/lib/download-csv'
 import { fetchJson } from '@/lib/fetch-json'
 import { businessConfig } from '@/lib/business-config'
@@ -347,10 +348,14 @@ export function SalesView() {
       {error && <LoadError message={error} onRetry={() => setRefreshKey((key) => key + 1)} />}
 
       <section className="metrics-grid" aria-label="Indicateurs ventes">
-        <MetricCard label="Nombre de ventes" value={data ? `${data.summary.count}` : '—'} icon={ShoppingCart} tone="navy" />
-        <MetricCard label="Chiffre d’affaires" value={data ? data.summary.totalRevenue : '—'} icon={WalletCards} tone="green" />
-        <MetricCard label="Panier moyen" value={data ? data.summary.avgBasket : '—'} icon={Receipt} tone="blue" />
-        <MetricCard label="Ventes à crédit" value={data ? `${data.summary.creditCount}` : '—'} icon={CreditCard} tone="orange" />
+        {loading ? <SkeletonCards count={4} /> : (
+          <>
+            <MetricCard label="Nombre de ventes" value={`${data?.summary.count ?? 0}`} icon={ShoppingCart} tone="navy" />
+            <MetricCard label="Chiffre d’affaires" value={data?.summary.totalRevenue ?? '—'} icon={WalletCards} tone="green" />
+            <MetricCard label="Panier moyen" value={data?.summary.avgBasket ?? '—'} icon={Receipt} tone="blue" />
+            <MetricCard label="Ventes à crédit" value={`${data?.summary.creditCount ?? 0}`} icon={CreditCard} tone="orange" />
+          </>
+        )}
       </section>
 
       <div className="toolbar-panel">
@@ -376,7 +381,8 @@ export function SalesView() {
               </tr>
             </thead>
             <tbody>
-              {filteredSales.map((sale) => (
+              {loading && <SkeletonRows count={6} />}
+              {!loading && filteredSales.map((sale) => (
                 <tr key={sale.reference}>
                   <td data-label="Référence">#{sale.reference}</td>
                   <td data-label="Date">{new Date(sale.date).toLocaleString('fr-FR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}</td>

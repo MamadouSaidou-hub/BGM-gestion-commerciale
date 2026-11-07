@@ -14,6 +14,7 @@ import {
 } from 'lucide-react'
 import { AppShell } from '@/components/app-shell'
 import { LoadError } from '@/components/load-error'
+import { SkeletonCards } from '@/components/skeleton'
 import { fetchJson } from '@/lib/fetch-json'
 
 const periods = ['Aujourd’hui', '7 derniers jours', 'Ce mois-ci']
@@ -99,12 +100,16 @@ export function DashboardView() {
       {error && <LoadError message={error} onRetry={() => setRefreshKey((key) => key + 1)} />}
 
       <section className="metrics-grid" aria-label="Indicateurs clés">
-        <MetricCard label="Chiffre d’affaires" value={data?.metrics.revenue.value ?? '—'} helper={data?.metrics.revenue.helper ?? ''} trend={data?.metrics.revenue.trend ?? ''} icon={WalletCards} tone="navy" />
-        {data?.metrics.margin && (
-          <MetricCard label="Marge brute" value={data.metrics.margin.value} helper={data.metrics.margin.helper} trend={data.metrics.margin.trend} icon={ArrowUpRight} tone="green" />
+        {loading ? <SkeletonCards count={4} /> : (
+          <>
+            <MetricCard label="Chiffre d’affaires" value={data?.metrics.revenue.value ?? '—'} helper={data?.metrics.revenue.helper ?? ''} trend={data?.metrics.revenue.trend ?? ''} icon={WalletCards} tone="navy" />
+            {data?.metrics.margin && (
+              <MetricCard label="Marge brute" value={data.metrics.margin.value} helper={data.metrics.margin.helper} trend={data.metrics.margin.trend} icon={ArrowUpRight} tone="green" />
+            )}
+            <MetricCard label="Articles en stock faible" value={data?.metrics.lowStock.value ?? '—'} helper={data?.metrics.lowStock.helper ?? ''} trend={data?.metrics.lowStock.trend ?? ''} icon={AlertTriangle} tone="orange" />
+            <MetricCard label="Créances à recouvrer" value={data?.metrics.receivables.value ?? '—'} helper={data?.metrics.receivables.helper ?? ''} trend={data?.metrics.receivables.trend ?? ''} icon={CreditCard} tone="blue" />
+          </>
         )}
-        <MetricCard label="Articles en stock faible" value={data?.metrics.lowStock.value ?? '—'} helper={data?.metrics.lowStock.helper ?? ''} trend={data?.metrics.lowStock.trend ?? ''} icon={AlertTriangle} tone="orange" />
-        <MetricCard label="Créances à recouvrer" value={data?.metrics.receivables.value ?? '—'} helper={data?.metrics.receivables.helper ?? ''} trend={data?.metrics.receivables.trend ?? ''} icon={CreditCard} tone="blue" />
       </section>
 
       <section className="dashboard-grid">
