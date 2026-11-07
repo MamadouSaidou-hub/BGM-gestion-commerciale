@@ -44,7 +44,10 @@ export const account = pgTable(
     id: text('id').primaryKey(),
     accountId: text('account_id').notNull(),
     providerId: text('provider_id').notNull(),
-    issuer: text('issuer').notNull(),
+    // Newer better-auth versions (1.7.3+) stopped writing this column on insert — give it a
+    // default so account creation (signup, admin.createUser) doesn't hit a NOT NULL violation.
+    // This column isn't read anywhere in our own code.
+    issuer: text('issuer').notNull().default('local:credential'),
     userId: text('user_id')
       .notNull()
       .references(() => user.id, { onDelete: 'cascade' }),
