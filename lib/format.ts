@@ -1,5 +1,9 @@
 export function formatFcfa(value: number) {
-  return `${Math.round(value).toLocaleString('fr-FR')} GNF`
+  // toLocaleString('fr-FR') separates thousands with a narrow no-break space (U+202F) — jsPDF's
+  // built-in fonts (used for every PDF export/invoice in this app) don't have that glyph and
+  // render it as a stray "/" instead. A plain space renders correctly everywhere, HTML included.
+  const digits = Math.round(value).toLocaleString('fr-FR').replace(/[  ]/g, ' ')
+  return `${digits} GNF`
 }
 
 export function pctChange(current: number, previous: number) {
