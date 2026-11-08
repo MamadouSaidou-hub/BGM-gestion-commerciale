@@ -32,6 +32,12 @@ export async function getDashboardData(period: PeriodKey, storeName: string | nu
     dayEnd.setDate(dayEnd.getDate() + 1)
     return { dayStart, dayEnd }
   })
+  // The "Évolution des ventes" chart always shows this fixed 7-day window, independent of the
+  // period filter above — its own trend must compare against the 7 days right before it, not
+  // whatever "previous period" the (possibly very different) selected period implies.
+  const salesTrendWeekStart = dayRanges[0].dayStart
+  const salesTrendPreviousWeekStart = new Date(salesTrendWeekStart)
+  salesTrendPreviousWeekStart.setDate(salesTrendPreviousWeekStart.getDate() - 7)
 
   // All of the following are independent reads — running them concurrently instead of one `await` at a
   // time turns N sequential network round-trips to Supabase into 1 (the slowest of them), which matters
@@ -39,6 +45,7 @@ export async function getDashboardData(period: PeriodKey, storeName: string | nu
   const [
     currentSalesRows,
     previousSalesRows,
+    previousWeekSalesRows,
     stockRows,
     receivableRows,
     salesTrendRows,
@@ -57,6 +64,10 @@ export async function getDashboardData(period: PeriodKey, storeName: string | nu
       .select({ total: sales.totalAmount, cost: sales.costAmount })
       .from(sales)
       .where(and(gte(sales.createdAt, previousStart.toISOString()), lt(sales.createdAt, start.toISOString()), storeFilter)),
+    db
+      .select({ total: sales.totalAmount })
+      .from(sales)
+      .where(and(gte(sales.createdAt, salesTrendPreviousWeekStart.toISOString()), lt(sales.createdAt, salesTrendWeekStart.toISOString()), storeFilter)),
     db
       .select({
         quantity: stockLevels.quantity,
@@ -156,6 +167,9 @@ export async function getDashboardData(period: PeriodKey, storeName: string | nu
   const distinctClients = new Set(receivableRows.map((row) => row.clientId)).size
 
   const salesTrend = salesTrendRows
+  const salesTrendTotal = salesTrendRows.reduce((sum, day) => sum + day.value, 0)
+  const salesTrendPreviousTotal = previousWeekSalesRows.reduce((sum, row) => sum + row.total, 0)
+  const salesTrendChange = formatTrend(pctChange(salesTrendTotal, salesTrendPreviousTotal))
 
   const totalAllStores = storeRevenueRows.reduce((sum, row) => sum + row.total, 0)
   const storePerformance = storeRevenueRows
@@ -245,6 +259,9 @@ export async function getDashboardData(period: PeriodKey, storeName: string | nu
       receivables: { value: formatFcfa(totalReceivables), helper: `${distinctClients} clients en retard`, trend: '' },
     },
     salesTrend,
+    salesTrendTotal,
+    salesTrendTotalFormatted: formatFcfa(salesTrendTotal),
+    salesTrendChange,
     storePerformance,
     activity: activity.slice(0, 4),
     alerts: alerts.slice(0, 3),
