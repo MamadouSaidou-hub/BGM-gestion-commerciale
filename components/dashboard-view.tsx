@@ -16,6 +16,7 @@ import { AppShell } from '@/components/app-shell'
 import { LoadError } from '@/components/load-error'
 import { SkeletonCards } from '@/components/skeleton'
 import { fetchJson } from '@/lib/fetch-json'
+import { authClient } from '@/lib/auth-client'
 
 const periods = ['Aujourd’hui', '7 derniers jours', 'Ce mois-ci']
 
@@ -51,6 +52,8 @@ function MetricCard({ label, value, helper, trend, icon: Icon, tone }: { label: 
 }
 
 export function DashboardView() {
+  const { data: session } = authClient.useSession()
+  const firstName = session?.user?.name?.trim().split(' ')[0]
   const [period, setPeriod] = useState(periods[0])
   const [store, setStore] = useState('Tous les magasins')
   const [data, setData] = useState<DashboardData | null>(null)
@@ -90,7 +93,7 @@ export function DashboardView() {
   return (
     <AppShell breadcrumb="Vue d’ensemble" section="Tableau de bord">
       <section className="page-heading">
-        <div><p className="eyebrow">{dateLabel}</p><h1>Bonjour Alain, <span>voici votre activité.</span></h1><p className="heading-subtitle">Gardez un œil sur vos opérations et vos performances.</p></div>
+        <div><p className="eyebrow">{dateLabel}</p><h1>{firstName ? `Bonjour ${firstName}, ` : 'Bonjour, '}<span>voici votre activité.</span></h1><p className="heading-subtitle">Gardez un œil sur vos opérations et vos performances.</p></div>
         <div className="filter-row">
           <label className="select-wrap"><span className="sr-only">Période</span><select value={period} onChange={(event) => setPeriod(event.target.value)}>{periods.map((item) => <option key={item}>{item}</option>)}</select><ChevronDown /></label>
           <label className="select-wrap"><span className="sr-only">Magasin</span><select value={store} onChange={(event) => setStore(event.target.value)}>{stores.map((item) => <option key={item}>{item}</option>)}</select><ChevronDown /></label>
