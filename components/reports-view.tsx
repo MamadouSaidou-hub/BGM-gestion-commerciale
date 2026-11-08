@@ -7,7 +7,7 @@ import { LoadError } from '@/components/load-error'
 import { fetchJson } from '@/lib/fetch-json'
 import { exportReportExcel, exportReportPdf, type ReportsData } from '@/lib/export-report'
 
-const periods = ['Aujourd’hui', '7 derniers jours', 'Ce mois-ci']
+const periods = ['Aujourd’hui', '7 derniers jours', 'Ce mois-ci', 'Cette année']
 
 const paymentDotClass: Record<string, string> = { paid: 'green-dot', partial: 'orange-dot', credit: 'blue-dot' }
 const paymentColorVar: Record<string, string> = { paid: 'var(--green)', partial: 'var(--orange)', credit: 'var(--blue)' }

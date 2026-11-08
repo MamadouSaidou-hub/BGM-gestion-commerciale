@@ -2,38 +2,11 @@ import { and, desc, eq, gte, lt, sql } from 'drizzle-orm'
 import { db } from '../client'
 import { clients, products, saleItems, sales, stores, supplierDeliveries, supplierPayments } from '../schema'
 import { formatFcfa } from '@/lib/format'
-import { periodRange, type PeriodKey } from '@/lib/period'
-
-const dayLabels = ['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam']
-
-function trendBucketsFor(period: PeriodKey, start: Date, end: Date) {
-  const buckets: { bucketStart: Date; bucketEnd: Date; label: string }[] = []
-  if (period === 'today') {
-    // Hourly buckets from midnight to the current hour — a single all-day bucket wouldn't show a trend.
-    const cursor = new Date(start)
-    while (cursor < end) {
-      const bucketStart = new Date(cursor)
-      const bucketEnd = new Date(cursor)
-      bucketEnd.setHours(bucketEnd.getHours() + 1)
-      buckets.push({ bucketStart, bucketEnd, label: bucketStart.toLocaleTimeString('fr-FR', { hour: '2-digit' }) })
-      cursor.setHours(cursor.getHours() + 1)
-    }
-    return buckets
-  }
-  const cursor = new Date(start)
-  while (cursor < end) {
-    const bucketStart = new Date(cursor)
-    const bucketEnd = new Date(cursor)
-    bucketEnd.setDate(bucketEnd.getDate() + 1)
-    buckets.push({ bucketStart, bucketEnd, label: `${dayLabels[bucketStart.getDay()]} ${bucketStart.getDate()}` })
-    cursor.setDate(cursor.getDate() + 1)
-  }
-  return buckets
-}
+import { periodRange, periodTrendBuckets, type PeriodKey } from '@/lib/period'
 
 export async function getReportsOverview(period: PeriodKey) {
   const { start, end } = periodRange(period)
-  const trendBuckets = trendBucketsFor(period, start, end)
+  const trendBuckets = periodTrendBuckets(period, start, end)
 
   const [
     storeRevenueRows,
