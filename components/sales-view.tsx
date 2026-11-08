@@ -9,6 +9,7 @@ import { SkeletonCards, SkeletonRows } from '@/components/skeleton'
 import { downloadCsv } from '@/lib/download-csv'
 import { fetchJson } from '@/lib/fetch-json'
 import { businessConfig } from '@/lib/business-config'
+import { authClient } from '@/lib/auth-client'
 
 const periods = ['Aujourd’hui', '7 derniers jours', 'Ce mois-ci']
 
@@ -289,6 +290,8 @@ function NewSaleForm({
 }
 
 export function SalesView() {
+  const { data: session } = authClient.useSession()
+  const isAdmin = session?.user?.role === 'admin'
   const [period, setPeriod] = useState(periods[1])
   const [store, setStore] = useState('Tous les magasins')
   const [search, setSearch] = useState('')
@@ -299,7 +302,30 @@ export function SalesView() {
   const [clientOptions, setClientOptions] = useState<ClientOption[]>([])
   const [productOptions, setProductOptions] = useState<ProductOption[]>([])
   const [modalOpen, setModalOpen] = useState(false)
+  const [cancellingSale, setCancellingSale] = useState<Sale | null>(null)
+  const [cancelling, setCancelling] = useState(false)
+  const [cancelError, setCancelError] = useState('')
   const [refreshKey, setRefreshKey] = useState(0)
+
+  async function handleCancelSale() {
+    if (!cancellingSale) return
+    setCancelling(true)
+    setCancelError('')
+    try {
+      const res = await fetch(`/api/ventes/${cancellingSale.reference}/annuler`, { method: 'POST' })
+      const json = await res.json()
+      if (!res.ok) {
+        setCancelError(json.error ?? 'Une erreur est survenue.')
+        return
+      }
+      setCancellingSale(null)
+      setRefreshKey((key) => key + 1)
+    } catch {
+      setCancelError('Connexion instable — impossible de contacter le serveur. Réessayez.')
+    } finally {
+      setCancelling(false)
+    }
+  }
 
   useEffect(() => {
     let cancelled = false
@@ -390,7 +416,14 @@ export function SalesView() {
                   <td data-label="Client">{sale.client}</td>
                   <td data-label="Montant">{sale.amount}</td>
                   <td data-label="Statut"><span className={`badge ${statusBadge[sale.status]}`}>{statusLabel[sale.status]}</span></td>
-                  <td><a className="btn-ghost" href={`/ventes/${sale.reference}/facture`} target="_blank" rel="noopener noreferrer"><Receipt size={12} style={{ verticalAlign: 'middle', marginRight: 4 }} />Facture</a></td>
+                  <td style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                    <a className="btn-ghost" href={`/ventes/${sale.reference}/facture`} target="_blank" rel="noopener noreferrer"><Receipt size={12} style={{ verticalAlign: 'middle', marginRight: 4 }} />Facture</a>
+                    {isAdmin && (
+                      <button type="button" className="btn-ghost" onClick={() => { setCancelError(''); setCancellingSale(sale) }}>
+                        <Trash2 size={12} style={{ verticalAlign: 'middle', marginRight: 4 }} />Annuler
+                      </button>
+                    )}
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -409,6 +442,17 @@ export function SalesView() {
             setRefreshKey((key) => key + 1)
           }}
         />
+      </Modal>
+
+      <Modal open={cancellingSale !== null} onClose={() => setCancellingSale(null)} title="Annuler cette vente ?" subtitle={cancellingSale ? `Vente #${cancellingSale.reference} — ${cancellingSale.amount}` : ''}>
+        {cancelError && <p className="form-error">{cancelError}</p>}
+        <p className="section-subtitle">
+          Le stock vendu sera restauré et le paiement/la créance liés à cette vente seront supprimés. À utiliser uniquement pour corriger une erreur de saisie — recréez ensuite la vente correcte.
+        </p>
+        <div className="form-actions">
+          <button type="button" className="btn-secondary" onClick={() => setCancellingSale(null)} disabled={cancelling}>Garder la vente</button>
+          <button type="button" className="btn-primary" onClick={handleCancelSale} disabled={cancelling}>{cancelling ? 'Annulation...' : 'Annuler la vente'}</button>
+        </div>
       </Modal>
     </AppShell>
   )

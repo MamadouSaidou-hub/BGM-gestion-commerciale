@@ -1,6 +1,6 @@
-import { and, eq, sql } from 'drizzle-orm'
+import { and, desc, eq, sql } from 'drizzle-orm'
 import { db } from '../client'
-import { payments, paymentMethod, products, receivables, saleItems, sales, stockLevels, stockMovements } from '../schema'
+import { cashMovements, payments, paymentMethod, products, receivables, saleItems, sales, stockLevels, stockMovements } from '../schema'
 import { getQuantity } from './shared'
 import { businessConfig } from '@/lib/business-config'
 import { recordAutoCashMovement } from './cash-accounts'
@@ -152,4 +152,77 @@ export async function createSale(input: {
   }
 
   return sale
+}
+
+/**
+ * Fully reverses a sale recorded by mistake — restores the stock it deducted, removes the
+ * payment/receivable it created, and deletes the sale itself. Admin-only (enforced by the API
+ * route), meant for genuine input errors (wrong product, wrong quantity, wrong client), not as a
+ * general-purpose "returns" feature.
+ *
+ * Deliberately does NOT touch anything from a *later*, separate client payment
+ * (`recordPayment`, `payments.saleId === null`) even if it happened to settle this sale's
+ * receivable — that money was real cash already recorded as its own "Encaissement client" cash
+ * movement, independent of which specific debt it was applied to; voiding this sale just removes
+ * the (now meaningless) obligation it tracked, it doesn't un-receive cash the business already has.
+ */
+export async function cancelSale(reference: string) {
+  const { sale, items, reversedAmount } = await db.transaction(async (tx) => {
+    const [sale] = await tx.select().from(sales).where(eq(sales.reference, reference))
+    if (!sale) {
+      throw new Error('Vente introuvable.')
+    }
+    const saleId = sale.id
+
+    const items = await tx.select().from(saleItems).where(eq(saleItems.saleId, saleId))
+    for (const item of items) {
+      const currentQuantity = await getQuantity(tx, item.productId, sale.storeId)
+      await tx
+        .update(stockLevels)
+        .set({ quantity: currentQuantity + item.quantity })
+        .where(and(eq(stockLevels.productId, item.productId), eq(stockLevels.storeId, sale.storeId)))
+      await tx.insert(stockMovements).values({
+        type: 'adjustment',
+        productId: item.productId,
+        storeId: sale.storeId,
+        quantity: item.quantity,
+        reference: `Annulation vente #${sale.reference}`,
+      })
+    }
+
+    // How much cash this sale actually put in the caisse at creation time — read from the cash
+    // movement itself (matched by the exact description createSale gave it), not from `payments`:
+    // a walk-in sale with no client never gets a `payments` row (clientId is required there) even
+    // when fully paid in cash, so that table alone would under-count the reversal for those sales.
+    const [cashMovement] = await tx
+      .select()
+      .from(cashMovements)
+      .where(and(eq(cashMovements.category, 'Vente'), eq(cashMovements.description, `Vente #${sale.reference}`)))
+      .orderBy(desc(cashMovements.createdAt))
+      .limit(1)
+    const reversedAmount = cashMovement?.amount ?? 0
+
+    await tx.delete(payments).where(eq(payments.saleId, saleId))
+
+    await tx.delete(receivables).where(eq(receivables.saleId, saleId))
+    await tx.delete(saleItems).where(eq(saleItems.saleId, saleId))
+    await tx.delete(sales).where(eq(sales.id, saleId))
+
+    return { sale, items, reversedAmount }
+  })
+
+  // Outside the transaction, same reasoning as createSale's own cash movement: never delete the
+  // original "money came in" record, add an equal-and-opposite one instead — the caisse's history
+  // should show that a sale happened and was later voided, not pretend it never did.
+  if (reversedAmount > 0) {
+    await recordAutoCashMovement({
+      direction: 'out',
+      amount: reversedAmount,
+      storeId: sale.storeId,
+      category: 'Annulation vente',
+      description: `Annulation vente #${sale.reference}`,
+    })
+  }
+
+  return { sale, itemsRestored: items.length }
 }

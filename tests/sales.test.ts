@@ -1,8 +1,9 @@
-import { and, eq } from 'drizzle-orm'
+import { and, desc, eq } from 'drizzle-orm'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { db } from '@/lib/db/client'
-import { clients, payments, products, receivables, saleItems, sales, stockLevels, stockMovements, stores } from '@/lib/db/schema'
-import { createSale } from '@/lib/db/mutations/sales'
+import { cashAccounts, cashMovements, clients, payments, products, receivables, saleItems, sales, stockLevels, stockMovements, stores } from '@/lib/db/schema'
+import { cancelSale, createSale } from '@/lib/db/mutations/sales'
+import { createCashAccount, setDefaultCashAccount } from '@/lib/db/mutations/cash-accounts'
 
 const runId = `test-${Date.now()}-${Math.floor(Math.random() * 1e6)}`
 
@@ -10,11 +11,22 @@ let storeId: number
 let clientId: number
 let sackProductId: number
 let tonneProductId: number
+let cashAccountId: number
+let previousDefaultAccountId: number | null
 const saleIds: number[] = []
 
 async function stockOf(productId: number) {
   const [row] = await db.select({ quantity: stockLevels.quantity }).from(stockLevels).where(and(eq(stockLevels.productId, productId), eq(stockLevels.storeId, storeId)))
   return row?.quantity ?? 0
+}
+
+async function cancellationMovementFor(reference: string) {
+  const [row] = await db
+    .select()
+    .from(cashMovements)
+    .where(eq(cashMovements.description, `Annulation vente #${reference}`))
+    .orderBy(desc(cashMovements.createdAt))
+  return row ?? null
 }
 
 beforeAll(async () => {
@@ -39,6 +51,15 @@ beforeAll(async () => {
     { productId: sackProductId, storeId, quantity: 100 },
     { productId: tonneProductId, storeId, quantity: 100 },
   ])
+
+  // createSale/cancelSale auto-route cash through whichever account is marked default — point it
+  // at a dedicated test account so assertions on cash movements aren't at the mercy of whatever
+  // real caisse already exists, then restore the previous default afterward.
+  const [existingDefault] = await db.select().from(cashAccounts).where(eq(cashAccounts.isDefault, true))
+  previousDefaultAccountId = existingDefault?.id ?? null
+  const account = await createCashAccount({ name: `Caisse ${runId}`, type: 'cash', initialBalance: 0 })
+  cashAccountId = account.id
+  await setDefaultCashAccount(cashAccountId)
 })
 
 afterAll(async () => {
@@ -54,6 +75,10 @@ afterAll(async () => {
   await db.delete(products).where(eq(products.id, tonneProductId))
   await db.delete(clients).where(eq(clients.id, clientId))
   await db.delete(stores).where(eq(stores.id, storeId))
+
+  if (previousDefaultAccountId) await setDefaultCashAccount(previousDefaultAccountId)
+  await db.delete(cashMovements).where(eq(cashMovements.cashAccountId, cashAccountId))
+  await db.delete(cashAccounts).where(eq(cashAccounts.id, cashAccountId))
 })
 
 describe('createSale', () => {
@@ -134,5 +159,76 @@ describe('createSale', () => {
         items: [{ productId: sackProductId, quantity: 0, unit: 'tonne', tonnage: 1 }],
       }),
     ).rejects.toThrow(/poids de sac/i)
+  })
+})
+
+describe('cancelSale', () => {
+  it('restores stock, reverses the caisse deposit, and deletes a walk-in (no client) cash sale', async () => {
+    const before = await stockOf(sackProductId)
+    const sale = await createSale({
+      storeId,
+      clientId: null,
+      paymentStatus: 'paid',
+      paidNow: 0,
+      dueInDays: 15,
+      items: [{ productId: sackProductId, quantity: 5 }], // total = 5,000
+    })
+    expect(await stockOf(sackProductId)).toBe(before - 5)
+
+    await cancelSale(sale.reference)
+
+    expect(await stockOf(sackProductId)).toBe(before)
+    const [remainingSale] = await db.select().from(sales).where(eq(sales.id, sale.id))
+    expect(remainingSale).toBeUndefined()
+
+    const reversal = await cancellationMovementFor(sale.reference)
+    expect(reversal?.type).toBe('expense')
+    expect(reversal?.amount).toBe(5000)
+  })
+
+  it('removes the payment and receivable of a partial credit sale, and reverses only the amount actually paid', async () => {
+    const sale = await createSale({
+      storeId,
+      clientId,
+      paymentStatus: 'partial',
+      paidNow: 4000,
+      dueInDays: 15,
+      items: [{ productId: sackProductId, quantity: 10 }], // total = 10,000
+    })
+
+    await cancelSale(sale.reference)
+
+    const [remainingPayment] = await db.select().from(payments).where(eq(payments.saleId, sale.id))
+    expect(remainingPayment).toBeUndefined()
+    const [remainingReceivable] = await db.select().from(receivables).where(eq(receivables.saleId, sale.id))
+    expect(remainingReceivable).toBeUndefined()
+
+    const reversal = await cancellationMovementFor(sale.reference)
+    expect(reversal?.amount).toBe(4000)
+  })
+
+  it('restores a tonne-unit sale back to the correct sack count', async () => {
+    // Earlier tests in this file (createSale's own tonne test) may have already drawn down
+    // tonneProductId's stock without cancelling — top it back up so this test's own math holds
+    // regardless of what ran before it.
+    await db.update(stockLevels).set({ quantity: 100 }).where(and(eq(stockLevels.productId, tonneProductId), eq(stockLevels.storeId, storeId)))
+    const before = await stockOf(tonneProductId)
+    const sale = await createSale({
+      storeId,
+      clientId: null,
+      paymentStatus: 'paid',
+      paidNow: 0,
+      dueInDays: 15,
+      items: [{ productId: tonneProductId, quantity: 0, unit: 'tonne', tonnage: 2.5 }], // 100 sacks
+    })
+    expect(await stockOf(tonneProductId)).toBe(before - 100)
+
+    await cancelSale(sale.reference)
+
+    expect(await stockOf(tonneProductId)).toBe(before)
+  })
+
+  it('rejects cancelling a reference that does not exist', async () => {
+    await expect(cancelSale(`BG-NOPE-${runId}`)).rejects.toThrow(/introuvable/i)
   })
 })
