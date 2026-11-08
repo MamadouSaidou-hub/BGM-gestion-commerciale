@@ -6,7 +6,16 @@ import { toApiErrorMessage } from '@/lib/api-error'
 import { getSessionContext, isAdmin } from '@/lib/session'
 
 export async function GET() {
-  const rows = await db.select().from(products).orderBy(products.name)
+  const ctx = await getSessionContext()
+  if (!ctx) return NextResponse.json({ error: 'Non authentifié.' }, { status: 401 })
+
+  // costPrice (purchase price) deliberately excluded — every consumer of this list (sale/transfer/
+  // delivery forms) only ever needs id/name/sku/unitPrice/sackWeightKg, and a gestionnaire isn't
+  // meant to see cost price or derive margin from it, same restriction already enforced on /api/stock.
+  const rows = await db
+    .select({ id: products.id, name: products.name, sku: products.sku, category: products.category, unitPrice: products.unitPrice, reorderThreshold: products.reorderThreshold, sackWeightKg: products.sackWeightKg })
+    .from(products)
+    .orderBy(products.name)
   return NextResponse.json({ products: rows })
 }
 
