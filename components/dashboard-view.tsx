@@ -18,7 +18,11 @@ import { SkeletonCards } from '@/components/skeleton'
 import { fetchJson } from '@/lib/fetch-json'
 import { authClient } from '@/lib/auth-client'
 
-const periods = ['Aujourd’hui', '7 derniers jours', 'Ce mois-ci', 'Cette année']
+const periods = ['Aujourd’hui', '7 derniers jours', 'Ce mois-ci', 'Cette année', 'Personnalisé']
+
+function todayIso() {
+  return new Date().toISOString().slice(0, 10)
+}
 
 type Metric = { value: string; helper: string; trend: string }
 type DueAlert = { kind: 'client' | 'supplier'; name: string; amount: string; dueDate: string; daysUntilDue: number }
@@ -57,16 +61,26 @@ export function DashboardView() {
   const firstName = session?.user?.name?.trim().split(' ')[0]
   const [period, setPeriod] = useState(periods[0])
   const [store, setStore] = useState('Tous les magasins')
+  const [customFrom, setCustomFrom] = useState(todayIso())
+  const [customTo, setCustomTo] = useState(todayIso())
   const [data, setData] = useState<DashboardData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [refreshKey, setRefreshKey] = useState(0)
 
+  const isCustom = period === 'Personnalisé'
+  const customRangeReady = !isCustom || (customFrom && customTo && customFrom <= customTo)
+
   useEffect(() => {
+    if (!customRangeReady) return
     let cancelled = false
     setLoading(true)
     setError('')
     const params = new URLSearchParams({ period, store })
+    if (isCustom) {
+      params.set('from', customFrom)
+      params.set('to', customTo)
+    }
     fetchJson<DashboardData>(`/api/dashboard?${params.toString()}`)
       .then((json) => {
         if (!cancelled) setData(json)
@@ -80,7 +94,7 @@ export function DashboardView() {
     return () => {
       cancelled = true
     }
-  }, [period, store, refreshKey])
+  }, [period, store, customFrom, customTo, customRangeReady, isCustom, refreshKey])
 
   const stores = data?.stores ?? ['Tous les magasins']
   const sales = data?.salesTrend ?? []
@@ -97,6 +111,13 @@ export function DashboardView() {
         <div><p className="eyebrow">{dateLabel}</p><h1>{firstName ? `Bonjour ${firstName}, ` : 'Bonjour, '}<span>voici votre activité.</span></h1><p className="heading-subtitle">Gardez un œil sur vos opérations et vos performances.</p></div>
         <div className="filter-row">
           <label className="select-wrap"><span className="sr-only">Période</span><select value={period} onChange={(event) => setPeriod(event.target.value)}>{periods.map((item) => <option key={item}>{item}</option>)}</select><ChevronDown /></label>
+          {isCustom && (
+            <div className="date-range-row">
+              <input type="date" value={customFrom} max={customTo} onChange={(event) => setCustomFrom(event.target.value)} aria-label="Du" />
+              <span>—</span>
+              <input type="date" value={customTo} min={customFrom} onChange={(event) => setCustomTo(event.target.value)} aria-label="Au" />
+            </div>
+          )}
           <label className="select-wrap"><span className="sr-only">Magasin</span><select value={store} onChange={(event) => setStore(event.target.value)}>{stores.map((item) => <option key={item}>{item}</option>)}</select><ChevronDown /></label>
         </div>
       </section>

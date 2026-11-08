@@ -10,9 +10,12 @@ export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams
   const period = parsePeriodLabel(searchParams.get('period'), 'today')
   const store = effectiveStoreParam(ctx, searchParams.get('store'))
+  const from = searchParams.get('from')
+  const to = searchParams.get('to')
+  const custom = period === 'custom' && from && to ? { from, to } : undefined
 
   const [data, storeOptions, dueAlerts] = await Promise.all([
-    getDashboardData(period, store),
+    getDashboardData(period, store, custom),
     getStoreOptions(),
     getDueDateAlerts(isAdmin(ctx) ? null : ctx.storeId, isAdmin(ctx)),
   ])

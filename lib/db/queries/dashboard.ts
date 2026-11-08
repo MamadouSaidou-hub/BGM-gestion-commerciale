@@ -2,7 +2,7 @@ import { and, desc, eq, gte, lt, sql } from 'drizzle-orm'
 import { db } from '../client'
 import { clients, payments, products, receivables, sales, stockLevels, stockMovements, stores, transfers } from '../schema'
 import { formatFcfa, formatTrend, pctChange } from '@/lib/format'
-import { periodRange, periodTrendBuckets, type PeriodKey } from '@/lib/period'
+import { periodRange, periodTrendBuckets, type CustomRange, type PeriodKey } from '@/lib/period'
 import { resolveStoreId } from './shared'
 
 type Activity = { title: string; subtitle: string; amount: string; tone: 'green' | 'blue' | 'orange' | 'purple'; icon: 'sale' | 'stock' | 'payment' | 'transfer'; createdAt: string }
@@ -17,17 +17,16 @@ function relativeTime(iso: string) {
   return `Il y a ${days} j`
 }
 
-export async function getDashboardData(period: PeriodKey, storeName: string | null) {
-  const { start, previousStart, end } = periodRange(period)
+export async function getDashboardData(period: PeriodKey, storeName: string | null, custom?: CustomRange) {
+  const { start, previousStart, end } = periodRange(period, custom)
   const storeId = await resolveStoreId(storeName)
   const storeFilter = storeId ? eq(sales.storeId, storeId) : undefined
   const stockFilter = storeId ? eq(stockLevels.storeId, storeId) : undefined
 
-  // The "Évolution des ventes" chart now follows the selected period exactly (hour buckets for
-  // "today", daily for "7 derniers jours"/"ce mois-ci", monthly for "cette année") — its total is
-  // therefore always exactly `revenue` below, and its trend is always exactly the same comparison
-  // against `previousStart`, so no separate query/number is needed for either.
-  const trendBuckets = periodTrendBuckets(period, start, end)
+  // The "Évolution des ventes" chart now follows the selected period exactly (granularity derived
+  // from the span's length) — its total is therefore always exactly `revenue` below, and its trend
+  // is always exactly the same comparison against `previousStart`, so no separate query is needed.
+  const trendBuckets = periodTrendBuckets(start, end)
 
   // All of the following are independent reads — running them concurrently instead of one `await` at a
   // time turns N sequential network round-trips to Supabase into 1 (the slowest of them), which matters

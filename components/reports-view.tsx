@@ -7,7 +7,11 @@ import { LoadError } from '@/components/load-error'
 import { fetchJson } from '@/lib/fetch-json'
 import { exportReportExcel, exportReportPdf, type ReportsData } from '@/lib/export-report'
 
-const periods = ['Aujourd’hui', '7 derniers jours', 'Ce mois-ci', 'Cette année']
+const periods = ['Aujourd’hui', '7 derniers jours', 'Ce mois-ci', 'Cette année', 'Personnalisé']
+
+function todayIso() {
+  return new Date().toISOString().slice(0, 10)
+}
 
 const paymentDotClass: Record<string, string> = { paid: 'green-dot', partial: 'orange-dot', credit: 'blue-dot' }
 const paymentColorVar: Record<string, string> = { paid: 'var(--green)', partial: 'var(--orange)', credit: 'var(--blue)' }
@@ -36,16 +40,27 @@ function RankBar({ label, value, formatted, max, color, sub }: { label: string; 
 
 export function ReportsView() {
   const [period, setPeriod] = useState(periods[2])
+  const [customFrom, setCustomFrom] = useState(todayIso())
+  const [customTo, setCustomTo] = useState(todayIso())
   const [data, setData] = useState<ReportsData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [refreshKey, setRefreshKey] = useState(0)
 
+  const isCustom = period === 'Personnalisé'
+  const customRangeReady = !isCustom || (customFrom && customTo && customFrom <= customTo)
+
   useEffect(() => {
+    if (!customRangeReady) return
     let cancelled = false
     setLoading(true)
     setError('')
-    fetchJson<ReportsData>(`/api/rapports?period=${encodeURIComponent(period)}`)
+    const params = new URLSearchParams({ period })
+    if (isCustom) {
+      params.set('from', customFrom)
+      params.set('to', customTo)
+    }
+    fetchJson<ReportsData>(`/api/rapports?${params.toString()}`)
       .then((json) => {
         if (!cancelled) setData(json)
       })
@@ -58,13 +73,14 @@ export function ReportsView() {
     return () => {
       cancelled = true
     }
-  }, [period, refreshKey])
+  }, [period, customFrom, customTo, customRangeReady, isCustom, refreshKey])
 
   const maxTrend = useMemo(() => Math.max(1, ...(data?.salesTrend ?? []).map((row) => row.value)), [data])
   const maxStore = useMemo(() => Math.max(1, ...(data?.storeRevenue ?? []).map((row) => row.amount)), [data])
   const maxProduct = useMemo(() => Math.max(1, ...(data?.topProducts ?? []).map((row) => row.revenue)), [data])
   const maxClient = useMemo(() => Math.max(1, ...(data?.topClients ?? []).map((row) => row.revenue)), [data])
   const maxPaymentAmount = useMemo(() => Math.max(1, ...(data?.paymentBreakdown ?? []).map((row) => row.amount)), [data])
+  const periodLabel = isCustom ? `Personnalisé (${customFrom} → ${customTo})` : period
 
   return (
     <AppShell breadcrumb="Pilotage" section="Rapports">
@@ -72,9 +88,16 @@ export function ReportsView() {
         <div><p className="eyebrow">SYNTHÈSE</p><h1>Rapports <span>d’activité</span></h1><p className="heading-subtitle">Statistiques, tendances et export du rapport de la période.</p></div>
         <div className="filter-row">
           <label className="select-wrap"><span className="sr-only">Période</span><select value={period} onChange={(event) => setPeriod(event.target.value)}>{periods.map((item) => <option key={item}>{item}</option>)}</select><ChevronDown /></label>
+          {isCustom && (
+            <div className="date-range-row">
+              <input type="date" value={customFrom} max={customTo} onChange={(event) => setCustomFrom(event.target.value)} aria-label="Du" />
+              <span>—</span>
+              <input type="date" value={customTo} min={customFrom} onChange={(event) => setCustomTo(event.target.value)} aria-label="Au" />
+            </div>
+          )}
           <div className="export-group">
-            <button className="btn-secondary" disabled={!data} onClick={() => data && exportReportPdf(data, period)}><Download size={13} /> PDF</button>
-            <button className="btn-secondary" disabled={!data} onClick={() => data && exportReportExcel(data, period)}><FileSpreadsheet size={13} /> Excel</button>
+            <button className="btn-secondary" disabled={!data} onClick={() => data && exportReportPdf(data, periodLabel)}><Download size={13} /> PDF</button>
+            <button className="btn-secondary" disabled={!data} onClick={() => data && exportReportExcel(data, periodLabel)}><FileSpreadsheet size={13} /> Excel</button>
           </div>
         </div>
       </section>

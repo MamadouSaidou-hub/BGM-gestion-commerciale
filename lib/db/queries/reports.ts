@@ -2,11 +2,11 @@ import { and, desc, eq, gte, lt, sql } from 'drizzle-orm'
 import { db } from '../client'
 import { clients, products, saleItems, sales, stores, supplierDeliveries, supplierPayments } from '../schema'
 import { formatFcfa } from '@/lib/format'
-import { periodRange, periodTrendBuckets, type PeriodKey } from '@/lib/period'
+import { periodRange, periodTrendBuckets, type CustomRange, type PeriodKey } from '@/lib/period'
 
-export async function getReportsOverview(period: PeriodKey) {
-  const { start, end } = periodRange(period)
-  const trendBuckets = periodTrendBuckets(period, start, end)
+export async function getReportsOverview(period: PeriodKey, custom?: CustomRange) {
+  const { start, end } = periodRange(period, custom)
+  const trendBuckets = periodTrendBuckets(start, end)
 
   const [
     storeRevenueRows,
