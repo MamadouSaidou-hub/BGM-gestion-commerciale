@@ -27,8 +27,12 @@ export async function createTransfer(input: {
       }
     }
 
-    const [{ count }] = await tx.select({ count: sql<number>`count(*)`.mapWith(Number) }).from(transfers)
-    const reference = `TR-${1000 + count + 1}`
+    // A Postgres sequence (not a count of existing rows) — counting breaks the moment a transfer
+    // is ever deleted (reused number) or two transfers are created at nearly the same instant
+    // (both read the same count before either inserts, both compute the same reference, the
+    // second insert fails on the unique constraint). Same fix already applied to sales.reference.
+    const seqResult = await tx.execute<{ next: string }>(sql`SELECT nextval('transfers_reference_seq') AS next`)
+    const reference = `TR-${1000 + Number(seqResult.rows[0].next)}`
 
     const [transfer] = await tx
       .insert(transfers)
