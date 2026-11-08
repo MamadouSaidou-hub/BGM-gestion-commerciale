@@ -26,7 +26,7 @@ export async function getTreasuryOverview(period: PeriodKey, storeName: string |
       .where(and(gte(payments.createdAt, start.toISOString()), storeId ? eq(payments.storeId, storeId) : undefined))
       .orderBy(desc(payments.createdAt)),
     db
-      .select({ total: sales.totalAmount, status: sales.paymentStatus })
+      .select({ total: sales.totalAmount, status: sales.paymentStatus, clientId: sales.clientId })
       .from(sales)
       .where(and(gte(sales.createdAt, start.toISOString()), storeId ? eq(sales.storeId, storeId) : undefined)),
     db
@@ -41,7 +41,10 @@ export async function getTreasuryOverview(period: PeriodKey, storeName: string |
     db.select({ amount: supplierPayables.amount, status: supplierPayables.status }).from(supplierPayables),
   ])
 
-  const cashSales = salesRows.filter((row) => row.status === 'paid').reduce((sum, row) => sum + row.total, 0)
+  // Only walk-in (no client) sales — a "paid" sale WITH a client also inserts its own `payments`
+  // row at creation (see createSale), which `totalPayments` below already counts. Including those
+  // here too would double-count the same cash as both a "vente comptant" and a "paiement reçu".
+  const cashSales = salesRows.filter((row) => row.status === 'paid' && row.clientId === null).reduce((sum, row) => sum + row.total, 0)
   const totalPayments = paymentRows.reduce((sum, row) => sum + row.amount, 0)
 
   const outstandingReceivables = receivableRows
