@@ -1,4 +1,4 @@
-import { and, desc, eq, gte, lt, or, sql } from 'drizzle-orm'
+import { and, desc, eq, gte, isNull, lt, or, sql } from 'drizzle-orm'
 import { db } from '../client'
 import { clients, payments, products, receivables, sales, stockLevels, stockMovements, stores, transfers } from '../schema'
 import { formatFcfa, formatTrend, pctChange } from '@/lib/format'
@@ -47,11 +47,11 @@ export async function getDashboardData(period: PeriodKey, storeName: string | nu
     db
       .select({ total: sales.totalAmount, cost: sales.costAmount })
       .from(sales)
-      .where(and(gte(sales.createdAt, start.toISOString()), storeFilter)),
+      .where(and(gte(sales.createdAt, start.toISOString()), storeFilter, isNull(sales.deletedAt))),
     db
       .select({ total: sales.totalAmount, cost: sales.costAmount })
       .from(sales)
-      .where(and(gte(sales.createdAt, previousStart.toISOString()), lt(sales.createdAt, start.toISOString()), storeFilter)),
+      .where(and(gte(sales.createdAt, previousStart.toISOString()), lt(sales.createdAt, start.toISOString()), storeFilter, isNull(sales.deletedAt))),
     db
       .select({
         quantity: stockLevels.quantity,
@@ -64,13 +64,17 @@ export async function getDashboardData(period: PeriodKey, storeName: string | nu
       .select({ amount: receivables.amount, clientId: receivables.clientId })
       .from(receivables)
       .innerJoin(sales, eq(receivables.saleId, sales.id))
-      .where(storeId ? and(eq(sales.storeId, storeId), eq(receivables.status, 'overdue')) : eq(receivables.status, 'overdue')),
+      .where(
+        storeId
+          ? and(eq(sales.storeId, storeId), eq(receivables.status, 'overdue'), isNull(sales.deletedAt))
+          : and(eq(receivables.status, 'overdue'), isNull(sales.deletedAt)),
+      ),
     Promise.all(
       trendBuckets.map(({ bucketStart, bucketEnd, label }) =>
         db
           .select({ total: sales.totalAmount })
           .from(sales)
-          .where(and(gte(sales.createdAt, bucketStart.toISOString()), lt(sales.createdAt, bucketEnd.toISOString()), storeFilter))
+          .where(and(gte(sales.createdAt, bucketStart.toISOString()), lt(sales.createdAt, bucketEnd.toISOString()), storeFilter, isNull(sales.deletedAt)))
           .then((rows) => ({ day: label, value: rows.reduce((sum, row) => sum + row.total, 0) })),
       ),
     ),
@@ -82,7 +86,7 @@ export async function getDashboardData(period: PeriodKey, storeName: string | nu
       })
       .from(sales)
       .innerJoin(stores, eq(sales.storeId, stores.id))
-      .where(and(gte(sales.createdAt, start.toISOString()), storeFilter))
+      .where(and(gte(sales.createdAt, start.toISOString()), storeFilter, isNull(sales.deletedAt)))
       .groupBy(sales.storeId, stores.name),
     db
       .select({
@@ -93,7 +97,7 @@ export async function getDashboardData(period: PeriodKey, storeName: string | nu
       })
       .from(sales)
       .innerJoin(stores, eq(sales.storeId, stores.id))
-      .where(storeFilter)
+      .where(storeFilter ? and(storeFilter, isNull(sales.deletedAt)) : isNull(sales.deletedAt))
       .orderBy(desc(sales.createdAt))
       .limit(2),
     db

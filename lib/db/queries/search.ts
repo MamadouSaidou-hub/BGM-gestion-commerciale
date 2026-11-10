@@ -1,4 +1,4 @@
-import { and, eq, ilike, or } from 'drizzle-orm'
+import { and, eq, ilike, isNull, or } from 'drizzle-orm'
 import { db } from '../client'
 import { clients, products, sales, stores, suppliers } from '../schema'
 import { formatFcfa } from '@/lib/format'
@@ -28,7 +28,7 @@ export async function getGlobalSearch(query: string, ctx: SessionContext): Promi
     db
       .select({ reference: sales.reference, totalAmount: sales.totalAmount, storeId: sales.storeId })
       .from(sales)
-      .where(and(ilike(sales.reference, pattern), ctx.storeId && !isAdmin ? eq(sales.storeId, ctx.storeId) : undefined))
+      .where(and(ilike(sales.reference, pattern), ctx.storeId && !isAdmin ? eq(sales.storeId, ctx.storeId) : undefined, isNull(sales.deletedAt)))
       .limit(LIMIT),
     isAdmin
       ? db.select({ name: suppliers.name, phone: suppliers.phone }).from(suppliers).where(ilike(suppliers.name, pattern)).limit(LIMIT)

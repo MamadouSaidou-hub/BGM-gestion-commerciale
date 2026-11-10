@@ -1,4 +1,4 @@
-import { and, eq, gte } from 'drizzle-orm'
+import { and, eq, gte, isNull } from 'drizzle-orm'
 import { db } from '../client'
 import { products, sales, stockLevels, stores } from '../schema'
 import { formatFcfa } from '@/lib/format'
@@ -13,7 +13,7 @@ export async function getStoresOverview() {
       const salesRows = await db
         .select({ total: sales.totalAmount })
         .from(sales)
-        .where(and(eq(sales.storeId, store.id), gte(sales.createdAt, start.toISOString())))
+        .where(and(eq(sales.storeId, store.id), gte(sales.createdAt, start.toISOString()), isNull(sales.deletedAt)))
       const revenue = salesRows.reduce((sum, row) => sum + row.total, 0)
 
       const stockRows = await db

@@ -1,4 +1,4 @@
-import { eq, ne } from 'drizzle-orm'
+import { and, eq, isNull, ne } from 'drizzle-orm'
 import { db } from '../client'
 import { clients, receivables, sales, stores, supplierPayables, suppliers } from '../schema'
 import { formatFcfa } from '@/lib/format'
@@ -30,7 +30,7 @@ export async function getDueDateAlerts(storeId: number | null, includeSuppliers:
     .from(receivables)
     .innerJoin(sales, eq(receivables.saleId, sales.id))
     .innerJoin(clients, eq(receivables.clientId, clients.id))
-    .where(ne(receivables.status, 'paid'))
+    .where(and(ne(receivables.status, 'paid'), isNull(sales.deletedAt)))
 
   const scopedReceivables = storeId ? receivableRows.filter((row) => row.storeId === storeId) : receivableRows
 

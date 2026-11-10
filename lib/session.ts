@@ -6,6 +6,7 @@ import { stores } from './db/schema'
 
 export type SessionContext = {
   userId: string
+  userName: string
   role: string
   storeId: number | null
   storeName: string | null
@@ -24,6 +25,7 @@ export async function getSessionContext(): Promise<SessionContext | null> {
 
   return {
     userId: session.user.id,
+    userName: session.user.name ?? 'Inconnu',
     role: (session.user as { role?: string }).role ?? 'gestionnaire',
     storeId,
     storeName,

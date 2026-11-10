@@ -1,4 +1,4 @@
-import { and, eq, gt, gte, lt } from 'drizzle-orm'
+import { and, eq, gt, gte, isNull, lt } from 'drizzle-orm'
 import { db } from '../client'
 import { discountApplications, discountScales, discountTiers, saleItems, sales, supplierDeliveries } from '../schema'
 
@@ -39,7 +39,7 @@ async function sacksMovedInPeriod(partyType: PartyType, partyId: number, period:
       .select({ quantity: saleItems.quantity })
       .from(saleItems)
       .innerJoin(sales, eq(saleItems.saleId, sales.id))
-      .where(and(eq(sales.clientId, partyId), gte(sales.createdAt, start.toISOString()), lt(sales.createdAt, end.toISOString())))
+      .where(and(eq(sales.clientId, partyId), gte(sales.createdAt, start.toISOString()), lt(sales.createdAt, end.toISOString()), isNull(sales.deletedAt)))
     return rows.reduce((sum, row) => sum + row.quantity, 0)
   }
 

@@ -1,4 +1,4 @@
-import { and, desc, eq, gte, lt, sql } from 'drizzle-orm'
+import { and, desc, eq, gte, isNull, lt, sql } from 'drizzle-orm'
 import { db } from '../client'
 import { clients, products, saleItems, sales, stores, supplierDeliveries, supplierPayments } from '../schema'
 import { formatFcfa } from '@/lib/format'
@@ -22,7 +22,7 @@ export async function getReportsOverview(period: PeriodKey, custom?: CustomRange
       .select({ storeName: stores.name, total: sql<number>`sum(${sales.totalAmount})`.mapWith(Number) })
       .from(sales)
       .innerJoin(stores, eq(sales.storeId, stores.id))
-      .where(gte(sales.createdAt, start.toISOString()))
+      .where(and(gte(sales.createdAt, start.toISOString()), isNull(sales.deletedAt)))
       .groupBy(stores.name),
     db
       .select({
@@ -34,7 +34,7 @@ export async function getReportsOverview(period: PeriodKey, custom?: CustomRange
       .from(saleItems)
       .innerJoin(products, eq(saleItems.productId, products.id))
       .innerJoin(sales, eq(saleItems.saleId, sales.id))
-      .where(gte(sales.createdAt, start.toISOString()))
+      .where(and(gte(sales.createdAt, start.toISOString()), isNull(sales.deletedAt)))
       .groupBy(products.name)
       .orderBy(desc(sql`sum(${saleItems.quantity} * ${saleItems.unitPrice})`))
       .limit(8),
@@ -46,7 +46,7 @@ export async function getReportsOverview(period: PeriodKey, custom?: CustomRange
       })
       .from(sales)
       .innerJoin(clients, eq(sales.clientId, clients.id))
-      .where(gte(sales.createdAt, start.toISOString()))
+      .where(and(gte(sales.createdAt, start.toISOString()), isNull(sales.deletedAt)))
       .groupBy(clients.name)
       .orderBy(desc(sql`sum(${sales.totalAmount})`))
       .limit(8),
@@ -57,7 +57,7 @@ export async function getReportsOverview(period: PeriodKey, custom?: CustomRange
         count: sql<number>`count(*)`.mapWith(Number),
       })
       .from(sales)
-      .where(gte(sales.createdAt, start.toISOString())),
+      .where(and(gte(sales.createdAt, start.toISOString()), isNull(sales.deletedAt))),
     db
       .select({
         status: sales.paymentStatus,
@@ -65,7 +65,7 @@ export async function getReportsOverview(period: PeriodKey, custom?: CustomRange
         amount: sql<number>`sum(${sales.totalAmount})`.mapWith(Number),
       })
       .from(sales)
-      .where(gte(sales.createdAt, start.toISOString()))
+      .where(and(gte(sales.createdAt, start.toISOString()), isNull(sales.deletedAt)))
       .groupBy(sales.paymentStatus),
     db
       .select({
@@ -83,7 +83,7 @@ export async function getReportsOverview(period: PeriodKey, custom?: CustomRange
         db
           .select({ total: sql<number>`coalesce(sum(${sales.totalAmount}), 0)`.mapWith(Number) })
           .from(sales)
-          .where(and(gte(sales.createdAt, bucketStart.toISOString()), lt(sales.createdAt, bucketEnd.toISOString())))
+          .where(and(gte(sales.createdAt, bucketStart.toISOString()), lt(sales.createdAt, bucketEnd.toISOString()), isNull(sales.deletedAt)))
           .then((rows) => ({ label, value: rows[0]?.total ?? 0 })),
       ),
     ),

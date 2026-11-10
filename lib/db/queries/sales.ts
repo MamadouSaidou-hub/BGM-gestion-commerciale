@@ -1,6 +1,6 @@
-import { and, desc, eq, gte } from 'drizzle-orm'
+import { and, desc, eq, gte, isNull } from 'drizzle-orm'
 import { db } from '../client'
-import { clients, products, receivables, saleItems, sales, stores } from '../schema'
+import { clients, payments, products, receivables, saleItems, sales, stores } from '../schema'
 import { formatFcfa } from '@/lib/format'
 import { periodRange, type PeriodKey } from '@/lib/period'
 import { resolveStoreId } from './shared'
@@ -22,7 +22,7 @@ export async function getSalesList(period: PeriodKey, storeName: string | null) 
     .from(sales)
     .innerJoin(stores, eq(sales.storeId, stores.id))
     .leftJoin(clients, eq(sales.clientId, clients.id))
-    .where(and(gte(sales.createdAt, start.toISOString()), storeFilter))
+    .where(and(gte(sales.createdAt, start.toISOString()), storeFilter, isNull(sales.deletedAt)))
     .orderBy(desc(sales.createdAt))
 
   const totalRevenue = rows.reduce((sum, row) => sum + row.totalAmount, 0)
@@ -56,6 +56,7 @@ export async function getSaleDetail(reference: string) {
       storeId: sales.storeId,
       storeName: stores.name,
       storeCity: stores.city,
+      clientId: sales.clientId,
       clientName: clients.name,
       clientPhone: clients.phone,
       totalAmount: sales.totalAmount,
@@ -70,10 +71,13 @@ export async function getSaleDetail(reference: string) {
 
   const items = await db
     .select({
+      productId: saleItems.productId,
       productName: products.name,
       sku: products.sku,
       quantity: saleItems.quantity,
       unitPrice: saleItems.unitPrice,
+      unit: saleItems.unit,
+      tonnage: saleItems.tonnage,
     })
     .from(saleItems)
     .innerJoin(products, eq(saleItems.productId, products.id))
@@ -84,22 +88,33 @@ export async function getSaleDetail(reference: string) {
     .from(receivables)
     .where(eq(receivables.saleId, sale.id))
 
+  // How much was actually paid at sale time — used to pre-fill the edit form's "montant payé"
+  // field; `payments.saleId` is the one unambiguous link to this specific sale (see the note on
+  // reverseSaleEffects for why this can't be derived from anywhere else).
+  const paidRows = await db.select({ amount: payments.amount }).from(payments).where(eq(payments.saleId, sale.id))
+  const paidAmount = paidRows.reduce((sum, row) => sum + row.amount, 0)
+
   return {
     reference: sale.reference,
     date: sale.createdAt,
     storeId: sale.storeId,
     storeName: sale.storeName,
     storeCity: sale.storeCity,
+    clientId: sale.clientId,
     clientName: sale.clientName ?? 'Vente comptoir',
     clientPhone: sale.clientPhone,
     paymentStatus: sale.paymentStatus,
+    paidAmount,
     totalAmount: sale.totalAmount,
     totalAmountFormatted: formatFcfa(sale.totalAmount),
     items: items.map((item) => ({
+      productId: item.productId,
       productName: item.productName,
       sku: item.sku,
       quantity: item.quantity,
       unitPrice: item.unitPrice,
+      unit: item.unit,
+      tonnage: item.tonnage,
       unitPriceFormatted: formatFcfa(item.unitPrice),
       lineTotalFormatted: formatFcfa(item.quantity * item.unitPrice),
     })),

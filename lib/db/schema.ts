@@ -1,5 +1,5 @@
 import { relations } from 'drizzle-orm'
-import { boolean, doublePrecision, index, integer, pgTable, serial, text, uniqueIndex } from 'drizzle-orm/pg-core'
+import { boolean, doublePrecision, index, integer, jsonb, pgTable, serial, text, uniqueIndex } from 'drizzle-orm/pg-core'
 
 const timestamps = {
   // JS-side default (not a DB-level `now()`/`current_timestamp`) so every timestamp in the app is
@@ -119,6 +119,10 @@ export const sales = pgTable(
     totalAmount: doublePrecision('total_amount').notNull(),
     costAmount: doublePrecision('cost_amount').notNull(),
     paymentStatus: text('payment_status', { enum: salePaymentStatus }).notNull().default('paid'),
+    // Soft delete — null means active. Kept as `text`/ISO string like every other timestamp in
+    // this schema (see `timestamps` above) rather than a native Postgres timestamp, so date-string
+    // comparisons stay consistent across the whole app.
+    deletedAt: text('deleted_at'),
     ...timestamps,
   },
   (table) => [
@@ -344,9 +348,34 @@ export const cashMovements = pgTable(
     description: text('description'),
     // Toujours positif — le sens (crédit/débit) est porté par `type`, pas par le signe.
     amount: doublePrecision('amount').notNull(),
+    // Soft delete — null means active, same convention as sales.deletedAt above.
+    deletedAt: text('deleted_at'),
     ...timestamps,
   },
   (table) => [index('cash_movements_account_id_idx').on(table.cashAccountId), index('cash_movements_created_at_idx').on(table.createdAt)],
+)
+
+// Generic trail for "who edited/deleted what, and why" — shared by every entity that gains
+// admin edit/delete, so each new entity only needs its own `deletedAt` column, not a whole new
+// set of audit columns. beforeData/afterData are full snapshots (not per-field diffs) since the
+// entities here are small and a snapshot is simpler to reason about than a diff format that has
+// to be kept in sync with every future schema change.
+export const auditLog = pgTable(
+  'audit_log',
+  {
+    id: serial('id').primaryKey(),
+    entityType: text('entity_type').notNull(),
+    entityId: integer('entity_id').notNull(),
+    action: text('action', { enum: ['update', 'delete'] as const }).notNull(),
+    actorId: text('actor_id').notNull(),
+    // Snapshot, not a FK to `user` — must stay readable even if the account is later removed.
+    actorName: text('actor_name').notNull(),
+    reason: text('reason'),
+    beforeData: jsonb('before_data').notNull(),
+    afterData: jsonb('after_data'),
+    ...timestamps,
+  },
+  (table) => [index('audit_log_entity_idx').on(table.entityType, table.entityId)],
 )
 
 export const discountPartyType = ['supplier', 'client'] as const

@@ -1,11 +1,12 @@
 import { and, desc, eq } from 'drizzle-orm'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { db } from '@/lib/db/client'
-import { cashAccounts, cashMovements, clients, payments, products, receivables, saleItems, sales, stockLevels, stockMovements, stores } from '@/lib/db/schema'
-import { cancelSale, createSale } from '@/lib/db/mutations/sales'
+import { auditLog, cashAccounts, cashMovements, clients, payments, products, receivables, saleItems, sales, stockLevels, stockMovements, stores } from '@/lib/db/schema'
+import { cancelSale, createSale, updateSale } from '@/lib/db/mutations/sales'
 import { createCashAccount, setDefaultCashAccount } from '@/lib/db/mutations/cash-accounts'
 
 const runId = `test-${Date.now()}-${Math.floor(Math.random() * 1e6)}`
+const testActor = { userId: `test-actor-${runId}`, userName: 'Test Suite' }
 
 let storeId: number
 let clientId: number
@@ -64,6 +65,7 @@ beforeAll(async () => {
 
 afterAll(async () => {
   for (const saleId of saleIds) {
+    await db.delete(auditLog).where(and(eq(auditLog.entityType, 'sale'), eq(auditLog.entityId, saleId)))
     await db.delete(receivables).where(eq(receivables.saleId, saleId))
     await db.delete(payments).where(eq(payments.saleId, saleId))
     await db.delete(saleItems).where(eq(saleItems.saleId, saleId))
@@ -173,13 +175,15 @@ describe('cancelSale', () => {
       dueInDays: 15,
       items: [{ productId: sackProductId, quantity: 5 }], // total = 5,000
     })
+    saleIds.push(sale.id)
     expect(await stockOf(sackProductId)).toBe(before - 5)
 
-    await cancelSale(sale.reference)
+    await cancelSale(sale.reference, testActor)
 
     expect(await stockOf(sackProductId)).toBe(before)
     const [remainingSale] = await db.select().from(sales).where(eq(sales.id, sale.id))
-    expect(remainingSale).toBeUndefined()
+    expect(remainingSale).toBeDefined()
+    expect(remainingSale.deletedAt).not.toBeNull()
 
     const reversal = await cancellationMovementFor(sale.reference)
     expect(reversal?.type).toBe('expense')
@@ -195,8 +199,9 @@ describe('cancelSale', () => {
       dueInDays: 15,
       items: [{ productId: sackProductId, quantity: 10 }], // total = 10,000
     })
+    saleIds.push(sale.id)
 
-    await cancelSale(sale.reference)
+    await cancelSale(sale.reference, testActor)
 
     const [remainingPayment] = await db.select().from(payments).where(eq(payments.saleId, sale.id))
     expect(remainingPayment).toBeUndefined()
@@ -221,14 +226,118 @@ describe('cancelSale', () => {
       dueInDays: 15,
       items: [{ productId: tonneProductId, quantity: 0, unit: 'tonne', tonnage: 2.5 }], // 100 sacks
     })
+    saleIds.push(sale.id)
     expect(await stockOf(tonneProductId)).toBe(before - 100)
 
-    await cancelSale(sale.reference)
+    await cancelSale(sale.reference, testActor)
 
     expect(await stockOf(tonneProductId)).toBe(before)
   })
 
   it('rejects cancelling a reference that does not exist', async () => {
-    await expect(cancelSale(`BG-NOPE-${runId}`)).rejects.toThrow(/introuvable/i)
+    await expect(cancelSale(`BG-NOPE-${runId}`, testActor)).rejects.toThrow(/introuvable/i)
+  })
+})
+
+describe('updateSale', () => {
+  it('correcting the quantity recomputes the total and adjusts stock by the delta', async () => {
+    const before = await stockOf(sackProductId)
+    const sale = await createSale({
+      storeId,
+      clientId: null,
+      paymentStatus: 'paid',
+      paidNow: 0,
+      dueInDays: 15,
+      items: [{ productId: sackProductId, quantity: 5 }], // total = 5,000
+    })
+    saleIds.push(sale.id)
+    expect(await stockOf(sackProductId)).toBe(before - 5)
+
+    const updated = await updateSale(
+      sale.reference,
+      { clientId: null, paymentStatus: 'paid', paidNow: 0, dueInDays: 15, items: [{ productId: sackProductId, quantity: 8 }] }, // total = 8,000
+      testActor,
+    )
+
+    expect(updated.totalAmount).toBe(8_000)
+    expect(await stockOf(sackProductId)).toBe(before - 8)
+    const [row] = await db.select().from(saleItems).where(eq(saleItems.saleId, sale.id))
+    expect(row.quantity).toBe(8)
+  })
+
+  it('switching a credit sale to fully paid removes its receivable and records the cash received', async () => {
+    const sale = await createSale({
+      storeId,
+      clientId,
+      paymentStatus: 'credit',
+      paidNow: 0,
+      dueInDays: 15,
+      items: [{ productId: sackProductId, quantity: 6 }], // total = 6,000
+    })
+    saleIds.push(sale.id)
+    const [receivableBefore] = await db.select().from(receivables).where(eq(receivables.saleId, sale.id))
+    expect(receivableBefore).toBeDefined()
+
+    await updateSale(
+      sale.reference,
+      { clientId, paymentStatus: 'paid', paidNow: 0, dueInDays: 15, items: [{ productId: sackProductId, quantity: 6 }] },
+      testActor,
+    )
+
+    const [receivableAfter] = await db.select().from(receivables).where(eq(receivables.saleId, sale.id))
+    expect(receivableAfter).toBeUndefined()
+    const [paymentAfter] = await db.select().from(payments).where(eq(payments.saleId, sale.id))
+    expect(paymentAfter?.amount).toBe(6_000)
+  })
+
+  it('writes an audit log row with the actor and a before/after snapshot', async () => {
+    const sale = await createSale({
+      storeId,
+      clientId: null,
+      paymentStatus: 'paid',
+      paidNow: 0,
+      dueInDays: 15,
+      items: [{ productId: sackProductId, quantity: 2 }],
+    })
+    saleIds.push(sale.id)
+
+    await updateSale(
+      sale.reference,
+      { clientId: null, paymentStatus: 'paid', paidNow: 0, dueInDays: 15, items: [{ productId: sackProductId, quantity: 3 }] },
+      testActor,
+      'quantité corrigée',
+    )
+
+    const [entry] = await db
+      .select()
+      .from(auditLog)
+      .where(and(eq(auditLog.entityType, 'sale'), eq(auditLog.entityId, sale.id), eq(auditLog.action, 'update')))
+    expect(entry.actorId).toBe(testActor.userId)
+    expect(entry.reason).toBe('quantité corrigée')
+    expect((entry.beforeData as { sale: { totalAmount: number } }).sale.totalAmount).toBe(2_000)
+    expect((entry.afterData as { sale: { totalAmount: number } }).sale.totalAmount).toBe(3_000)
+  })
+
+  it('rejects editing a reference that does not exist', async () => {
+    await expect(
+      updateSale(`BG-NOPE-${runId}`, { clientId: null, paymentStatus: 'paid', paidNow: 0, dueInDays: 15, items: [{ productId: sackProductId, quantity: 1 }] }, testActor),
+    ).rejects.toThrow(/introuvable/i)
+  })
+
+  it('rejects editing an already-cancelled sale', async () => {
+    const sale = await createSale({
+      storeId,
+      clientId: null,
+      paymentStatus: 'paid',
+      paidNow: 0,
+      dueInDays: 15,
+      items: [{ productId: sackProductId, quantity: 1 }],
+    })
+    saleIds.push(sale.id)
+    await cancelSale(sale.reference, testActor)
+
+    await expect(
+      updateSale(sale.reference, { clientId: null, paymentStatus: 'paid', paidNow: 0, dueInDays: 15, items: [{ productId: sackProductId, quantity: 1 }] }, testActor),
+    ).rejects.toThrow(/introuvable/i)
   })
 })
