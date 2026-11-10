@@ -1,6 +1,6 @@
 import { db } from '../client'
 import { clients, payments, receivables, stores } from '../schema'
-import { formatFcfa } from '@/lib/format'
+import { formatFcfa, isPastDue } from '@/lib/format'
 
 export async function getClientsOverview(storeId: number | null = null) {
   const allClientRows = await db.select({ id: clients.id, name: clients.name, phone: clients.phone, storeId: clients.storeId }).from(clients)
@@ -9,7 +9,7 @@ export async function getClientsOverview(storeId: number | null = null) {
   const storeMap = new Map(storeRows.map((row) => [row.id, row.name]))
 
   const receivableRows = await db
-    .select({ clientId: receivables.clientId, amount: receivables.amount, status: receivables.status })
+    .select({ clientId: receivables.clientId, amount: receivables.amount, status: receivables.status, dueDate: receivables.dueDate })
     .from(receivables)
 
   const paymentRows = await db.select({ clientId: payments.clientId, amount: payments.amount }).from(payments)
@@ -17,7 +17,7 @@ export async function getClientsOverview(storeId: number | null = null) {
   const result = clientRows.map((client) => {
     const outstandingRows = receivableRows.filter((row) => row.clientId === client.id && row.status !== 'paid')
     const outstanding = outstandingRows.reduce((sum, row) => sum + row.amount, 0)
-    const overdue = outstandingRows.some((row) => row.status === 'overdue')
+    const overdue = outstandingRows.some((row) => isPastDue(row.dueDate))
     const totalPaid = paymentRows.filter((row) => row.clientId === client.id).reduce((sum, row) => sum + row.amount, 0)
     const status: 'ok' | 'pending' | 'overdue' = outstanding === 0 ? 'ok' : overdue ? 'overdue' : 'pending'
     return {

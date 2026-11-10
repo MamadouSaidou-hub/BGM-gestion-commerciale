@@ -15,3 +15,19 @@ export function formatTrend(pct: number) {
   const sign = pct >= 0 ? '+' : ''
   return `${sign}${pct.toFixed(1).replace('.', ',')} %`
 }
+
+/**
+ * Whether a due date has passed (day-level, not the exact instant — matches how a shopkeeper
+ * thinks about an overdue debt and how the due-date notification banner already computes it).
+ * Receivables/payables only ever get their `status` column written as 'pending' or 'paid' —
+ * nothing in this codebase ever transitions it to 'overdue', so a dashboard/clients list that
+ * trusted the stored status always read 0 overdue debts regardless of reality. This derives it
+ * from the actual due date instead, the same way the notification banner always has.
+ */
+export function isPastDue(dueDate: string): boolean {
+  const due = new Date(dueDate)
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  due.setHours(0, 0, 0, 0)
+  return due.getTime() < today.getTime()
+}

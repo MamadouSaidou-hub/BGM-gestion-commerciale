@@ -1,7 +1,7 @@
-import { and, desc, eq, gte, isNull, lt, or, sql } from 'drizzle-orm'
+import { and, desc, eq, gte, isNull, lt, ne, or, sql } from 'drizzle-orm'
 import { db } from '../client'
 import { clients, payments, products, receivables, sales, stockLevels, stockMovements, stores, transfers } from '../schema'
-import { formatFcfa, formatTrend, pctChange } from '@/lib/format'
+import { formatFcfa, formatTrend, isPastDue, pctChange } from '@/lib/format'
 import { periodRange, periodTrendBuckets, type CustomRange, type PeriodKey } from '@/lib/period'
 import { resolveStoreId } from './shared'
 
@@ -61,14 +61,18 @@ export async function getDashboardData(period: PeriodKey, storeName: string | nu
       .innerJoin(products, eq(stockLevels.productId, products.id))
       .where(stockFilter),
     db
-      .select({ amount: receivables.amount, clientId: receivables.clientId })
+      .select({ amount: receivables.amount, clientId: receivables.clientId, dueDate: receivables.dueDate })
       .from(receivables)
       .innerJoin(sales, eq(receivables.saleId, sales.id))
       .where(
         storeId
-          ? and(eq(sales.storeId, storeId), eq(receivables.status, 'overdue'), isNull(sales.deletedAt))
-          : and(eq(receivables.status, 'overdue'), isNull(sales.deletedAt)),
-      ),
+          ? and(eq(sales.storeId, storeId), ne(receivables.status, 'paid'), isNull(sales.deletedAt))
+          : and(ne(receivables.status, 'paid'), isNull(sales.deletedAt)),
+      )
+      // `status` is only ever 'pending' or 'paid' in practice (see isPastDue's docstring) — overdue
+      // is derived from the due date here, same as the notification banner, not trusted from the
+      // stored column.
+      .then((rows) => rows.filter((row) => isPastDue(row.dueDate))),
     Promise.all(
       trendBuckets.map(({ bucketStart, bucketEnd, label }) =>
         db

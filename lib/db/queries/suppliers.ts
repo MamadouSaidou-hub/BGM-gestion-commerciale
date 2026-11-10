@@ -1,10 +1,12 @@
 import { db } from '../client'
 import { supplierDeliveries, supplierPayables, supplierPayments, suppliers } from '../schema'
-import { formatFcfa } from '@/lib/format'
+import { formatFcfa, isPastDue } from '@/lib/format'
 
 export async function getSuppliersOverview() {
   const supplierRows = await db.select().from(suppliers)
-  const payableRows = await db.select({ supplierId: supplierPayables.supplierId, amount: supplierPayables.amount, status: supplierPayables.status }).from(supplierPayables)
+  const payableRows = await db
+    .select({ supplierId: supplierPayables.supplierId, amount: supplierPayables.amount, status: supplierPayables.status, dueDate: supplierPayables.dueDate })
+    .from(supplierPayables)
   const paymentRows = await db.select({ supplierId: supplierPayments.supplierId, amount: supplierPayments.amount }).from(supplierPayments)
   const deliveryRows = await db.select({ supplierId: supplierDeliveries.supplierId, sackCount: supplierDeliveries.sackCount, createdAt: supplierDeliveries.createdAt }).from(supplierDeliveries)
 
@@ -15,7 +17,7 @@ export async function getSuppliersOverview() {
   const result = supplierRows.map((supplier) => {
     const owedRows = payableRows.filter((row) => row.supplierId === supplier.id && row.status !== 'paid')
     const owed = owedRows.reduce((sum, row) => sum + row.amount, 0)
-    const overdue = owedRows.some((row) => row.status === 'overdue')
+    const overdue = owedRows.some((row) => isPastDue(row.dueDate))
     const totalPaid = paymentRows.filter((row) => row.supplierId === supplier.id).reduce((sum, row) => sum + row.amount, 0)
     const deliveriesThisMonth = deliveryRows.filter((row) => row.supplierId === supplier.id && row.createdAt >= monthStart.toISOString())
     const sacksThisMonth = deliveriesThisMonth.reduce((sum, row) => sum + row.sackCount, 0)
