@@ -1,6 +1,8 @@
-import { eq, ne, sql } from 'drizzle-orm'
+import { and, eq, isNull, ne, sql } from 'drizzle-orm'
 import { db } from '../client'
-import { cashAccounts, cashAccountType, cashMovements, cashMovementType } from '../schema'
+import { auditLog, cashAccounts, cashAccountType, cashMovements, cashMovementType } from '../schema'
+
+type CashMovementActor = { userId: string; userName: string }
 
 /**
  * Auto-records a cash movement for money that actually changed hands elsewhere (a sale payment, a
@@ -128,5 +130,90 @@ export async function recordCashMovement(input: {
       .where(eq(cashAccounts.id, input.cashAccountId))
 
     return movement
+  })
+}
+
+/**
+ * Corrects a cash movement entered by mistake (wrong amount/category/type) without losing its id
+ * or its place in the caisse's history. The account's `balance` is a running total, not something
+ * recomputed from summing movements, so the edit must undo the old amount's effect and apply the
+ * new one in the same step — equivalent to deleting then re-recording, but as one row.
+ */
+export async function updateCashMovement(
+  id: number,
+  input: { category: string; description?: string | null; amount: number; type: (typeof cashMovementType)[number] },
+  actor: CashMovementActor,
+  reason?: string,
+) {
+  if (input.amount <= 0) {
+    throw new Error('Le montant doit être supérieur à zéro.')
+  }
+
+  return db.transaction(async (tx) => {
+    const [existing] = await tx.select().from(cashMovements).where(and(eq(cashMovements.id, id), isNull(cashMovements.deletedAt)))
+    if (!existing) {
+      throw new Error('Mouvement introuvable.')
+    }
+
+    const oldDelta = existing.type === 'deposit' ? existing.amount : -existing.amount
+    const newDelta = input.type === 'deposit' ? input.amount : -input.amount
+    await tx
+      .update(cashAccounts)
+      .set({ balance: sql`${cashAccounts.balance} - ${oldDelta} + ${newDelta}` })
+      .where(eq(cashAccounts.id, existing.cashAccountId))
+
+    const [updated] = await tx
+      .update(cashMovements)
+      .set({ category: input.category, description: input.description ?? null, amount: input.amount, type: input.type })
+      .where(eq(cashMovements.id, id))
+      .returning()
+
+    await tx.insert(auditLog).values({
+      entityType: 'cash_movement',
+      entityId: id,
+      action: 'update',
+      actorId: actor.userId,
+      actorName: actor.userName,
+      reason: reason ?? null,
+      beforeData: existing,
+      afterData: updated,
+    })
+
+    return updated
+  })
+}
+
+/**
+ * Soft-deletes a cash movement entered by mistake — reverses its effect on the account's running
+ * balance and flags it `deletedAt` (kept in the database, not erased) so an admin can later see
+ * that it existed and who removed it.
+ */
+export async function deleteCashMovement(id: number, actor: CashMovementActor, reason?: string) {
+  return db.transaction(async (tx) => {
+    const [existing] = await tx.select().from(cashMovements).where(and(eq(cashMovements.id, id), isNull(cashMovements.deletedAt)))
+    if (!existing) {
+      throw new Error('Mouvement introuvable.')
+    }
+
+    const delta = existing.type === 'deposit' ? existing.amount : -existing.amount
+    await tx
+      .update(cashAccounts)
+      .set({ balance: sql`${cashAccounts.balance} - ${delta}` })
+      .where(eq(cashAccounts.id, existing.cashAccountId))
+
+    const deletedAt = new Date().toISOString()
+    await tx.update(cashMovements).set({ deletedAt }).where(eq(cashMovements.id, id))
+
+    await tx.insert(auditLog).values({
+      entityType: 'cash_movement',
+      entityId: id,
+      action: 'delete',
+      actorId: actor.userId,
+      actorName: actor.userName,
+      reason: reason ?? null,
+      beforeData: existing,
+    })
+
+    return existing
   })
 }

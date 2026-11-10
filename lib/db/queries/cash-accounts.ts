@@ -1,4 +1,4 @@
-import { desc, eq, gte } from 'drizzle-orm'
+import { and, desc, eq, gte, isNull } from 'drizzle-orm'
 import { db } from '../client'
 import { cashAccounts, cashMovements } from '../schema'
 import { formatFcfa } from '@/lib/format'
@@ -14,6 +14,7 @@ export async function getCashAccountsOverview(period: PeriodKey) {
     db
       .select({
         id: cashMovements.id,
+        cashAccountId: cashMovements.cashAccountId,
         type: cashMovements.type,
         category: cashMovements.category,
         description: cashMovements.description,
@@ -23,7 +24,7 @@ export async function getCashAccountsOverview(period: PeriodKey) {
       })
       .from(cashMovements)
       .innerJoin(cashAccounts, eq(cashMovements.cashAccountId, cashAccounts.id))
-      .where(gte(cashMovements.createdAt, start.toISOString()))
+      .where(and(gte(cashMovements.createdAt, start.toISOString()), isNull(cashMovements.deletedAt)))
       .orderBy(desc(cashMovements.createdAt)),
   ])
 
@@ -60,11 +61,13 @@ export async function getCashAccountsOverview(period: PeriodKey) {
     })),
     movements: movementRows.map((row) => ({
       id: row.id,
+      cashAccountId: row.cashAccountId,
       date: row.createdAt,
       account: row.accountName,
       type: row.type,
       category: row.category,
       description: row.description,
+      amount: row.amount,
       amountFormatted: formatFcfa(row.amount),
     })),
     summary: {

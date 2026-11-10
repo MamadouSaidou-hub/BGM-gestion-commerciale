@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { ArrowDownCircle, ArrowLeftRight, ArrowUpCircle, Banknote, ChevronDown, Landmark, Plus, Smartphone, Star, TrendingDown, TrendingUp, Wallet } from 'lucide-react'
+import { ArrowDownCircle, ArrowLeftRight, ArrowUpCircle, Banknote, ChevronDown, Landmark, Pencil, Plus, Smartphone, Star, TrendingDown, TrendingUp, Trash2, Wallet } from 'lucide-react'
 import { AppShell } from '@/components/app-shell'
 import { Modal } from '@/components/modal'
 import { LoadError } from '@/components/load-error'
@@ -13,7 +13,17 @@ const periods = ['Aujourd’hui', '7 derniers jours', 'Ce mois-ci']
 
 type CashAccountType = 'cash' | 'bank' | 'mobile_money' | 'other'
 type CashAccount = { id: number; name: string; type: CashAccountType; balance: number; balanceFormatted: string; isDefault: boolean }
-type Movement = { id: number; date: string; account: string; type: 'expense' | 'deposit'; category: string; description: string | null; amountFormatted: string }
+type Movement = {
+  id: number
+  cashAccountId: number
+  date: string
+  account: string
+  type: 'expense' | 'deposit'
+  category: string
+  description: string | null
+  amount: number
+  amountFormatted: string
+}
 type ExpenseBreakdownRow = { category: string; amount: number; amountFormatted: string; pct: number }
 type CaisseData = {
   accounts: CashAccount[]
@@ -175,6 +185,77 @@ function NewMovementForm({ type, accounts, onCreated }: { type: 'expense' | 'dep
   )
 }
 
+function EditMovementForm({ movement, accounts, onSaved }: { movement: Movement; accounts: CashAccount[]; onSaved: () => void }) {
+  const [type, setType] = useState<'expense' | 'deposit'>(movement.type)
+  const [category, setCategory] = useState(movement.category)
+  const [description, setDescription] = useState(movement.description ?? '')
+  const [amount, setAmount] = useState(String(movement.amount))
+  const [reason, setReason] = useState('')
+  const [error, setError] = useState('')
+  const [submitting, setSubmitting] = useState(false)
+
+  useEffect(() => {
+    if (type === 'expense' && !EXPENSE_CATEGORIES.includes(category as (typeof EXPENSE_CATEGORIES)[number])) setCategory(EXPENSE_CATEGORIES[0])
+    if (type === 'deposit' && EXPENSE_CATEGORIES.includes(category as (typeof EXPENSE_CATEGORIES)[number])) setCategory('')
+  }, [type, category])
+
+  async function handleSubmit(event: React.FormEvent) {
+    event.preventDefault()
+    setError('')
+    setSubmitting(true)
+    try {
+      const res = await fetch(`/api/caisses/mouvements/${movement.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type, category, description, amount, reason: reason || undefined }),
+      })
+      const json = await res.json()
+      if (!res.ok) {
+        setError(json.error ?? 'Une erreur est survenue.')
+        return
+      }
+      onSaved()
+    } catch {
+      setError('Connexion instable — impossible de contacter le serveur. Réessayez.')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  return (
+    <form onSubmit={handleSubmit}>
+      {error && <p className="form-error">{error}</p>}
+      <div className="form-field"><label>Caisse</label><input readOnly disabled value={accounts.find((a) => a.id === movement.cashAccountId)?.name ?? movement.account} /></div>
+      <div className="form-row">
+        <div className="form-field">
+          <label>Type</label>
+          <select value={type} onChange={(event) => setType(event.target.value as 'expense' | 'deposit')}>
+            <option value="expense">Dépense</option>
+            <option value="deposit">Dépôt</option>
+          </select>
+        </div>
+        <div className="form-field"><label>Montant (GNF)</label><input required type="number" min="1" value={amount} onChange={(event) => setAmount(event.target.value)} /></div>
+      </div>
+      <div className="form-field">
+        <label>Motif</label>
+        {type === 'expense' ? (
+          <select required value={category} onChange={(event) => setCategory(event.target.value)}>
+            {EXPENSE_CATEGORIES.map((option) => <option key={option} value={option}>{option}</option>)}
+          </select>
+        ) : (
+          <input required value={category} onChange={(event) => setCategory(event.target.value)} placeholder="Ex : Vente comptant, Apport..." />
+        )}
+      </div>
+      <div className="form-field"><label>Description (optionnel)</label><input value={description} onChange={(event) => setDescription(event.target.value)} /></div>
+      <div className="form-field">
+        <label>Motif de la correction (optionnel)</label>
+        <input placeholder="Ex. montant mal saisi" value={reason} onChange={(event) => setReason(event.target.value)} />
+      </div>
+      <div className="form-actions"><button type="submit" className="btn-primary" disabled={submitting}>{submitting ? 'Enregistrement...' : 'Enregistrer la correction'}</button></div>
+    </form>
+  )
+}
+
 function TransferForm({ accounts, onCreated }: { accounts: CashAccount[]; onCreated: () => void }) {
   const [fromId, setFromId] = useState('')
   const [toId, setToId] = useState('')
@@ -253,11 +334,41 @@ export function CaisseView() {
   const [expenseModalOpen, setExpenseModalOpen] = useState(false)
   const [depositModalOpen, setDepositModalOpen] = useState(false)
   const [transferModalOpen, setTransferModalOpen] = useState(false)
+  const [editingMovement, setEditingMovement] = useState<Movement | null>(null)
+  const [deletingMovement, setDeletingMovement] = useState<Movement | null>(null)
+  const [deleteReason, setDeleteReason] = useState('')
+  const [deleting, setDeleting] = useState(false)
+  const [deleteError, setDeleteError] = useState('')
   const [refreshKey, setRefreshKey] = useState(0)
 
   async function makeDefault(id: number) {
     await fetch(`/api/caisses/${id}/defaut`, { method: 'POST' })
     setRefreshKey((key) => key + 1)
+  }
+
+  async function handleDeleteMovement() {
+    if (!deletingMovement) return
+    setDeleting(true)
+    setDeleteError('')
+    try {
+      const res = await fetch(`/api/caisses/mouvements/${deletingMovement.id}`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reason: deleteReason || undefined }),
+      })
+      const json = await res.json()
+      if (!res.ok) {
+        setDeleteError(json.error ?? 'Une erreur est survenue.')
+        return
+      }
+      setDeletingMovement(null)
+      setDeleteReason('')
+      setRefreshKey((key) => key + 1)
+    } catch {
+      setDeleteError('Connexion instable — impossible de contacter le serveur. Réessayez.')
+    } finally {
+      setDeleting(false)
+    }
   }
 
   useEffect(() => {
@@ -370,6 +481,7 @@ export function CaisseView() {
                 <th>Type</th>
                 <th>Motif</th>
                 <th>Montant</th>
+                <th></th>
               </tr>
             </thead>
             <tbody>
@@ -380,6 +492,14 @@ export function CaisseView() {
                   <td data-label="Type"><span className={`badge ${movement.type === 'deposit' ? 'badge-green' : 'badge-orange'}`}>{movementTypeLabel[movement.type]}</span></td>
                   <td data-label="Motif">{movement.category}</td>
                   <td data-label="Montant">{movement.amountFormatted}</td>
+                  <td style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                    <button type="button" className="btn-ghost" onClick={() => setEditingMovement(movement)}>
+                      <Pencil size={12} style={{ verticalAlign: 'middle', marginRight: 4 }} />Modifier
+                    </button>
+                    <button type="button" className="btn-ghost" onClick={() => { setDeleteError(''); setDeleteReason(''); setDeletingMovement(movement) }}>
+                      <Trash2 size={12} style={{ verticalAlign: 'middle', marginRight: 4 }} />Supprimer
+                    </button>
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -402,6 +522,36 @@ export function CaisseView() {
 
       <Modal open={transferModalOpen} onClose={() => setTransferModalOpen(false)} title="Transférer entre caisses" subtitle="Déplacez de l’argent de la caisse principale vers une autre (ou inversement).">
         <TransferForm accounts={accounts} onCreated={() => { setTransferModalOpen(false); setRefreshKey((key) => key + 1) }} />
+      </Modal>
+
+      <Modal open={editingMovement !== null} onClose={() => setEditingMovement(null)} title="Modifier le mouvement" subtitle="Corrigez le montant, le motif ou le type.">
+        {editingMovement && (
+          <EditMovementForm
+            movement={editingMovement}
+            accounts={accounts}
+            onSaved={() => { setEditingMovement(null); setRefreshKey((key) => key + 1) }}
+          />
+        )}
+      </Modal>
+
+      <Modal
+        open={deletingMovement !== null}
+        onClose={() => setDeletingMovement(null)}
+        title="Supprimer ce mouvement ?"
+        subtitle={deletingMovement ? `${movementTypeLabel[deletingMovement.type]} — ${deletingMovement.amountFormatted}` : ''}
+      >
+        {deleteError && <p className="form-error">{deleteError}</p>}
+        <p className="section-subtitle">
+          Le solde de la caisse sera ajusté en conséquence. Le mouvement reste visible dans l’historique (marqué supprimé, avec qui et quand) — il disparaît juste des listes et des totaux.
+        </p>
+        <div className="form-field">
+          <label>Motif (optionnel)</label>
+          <input placeholder="Ex. montant saisi par erreur" value={deleteReason} onChange={(event) => setDeleteReason(event.target.value)} />
+        </div>
+        <div className="form-actions">
+          <button type="button" className="btn-secondary" onClick={() => setDeletingMovement(null)} disabled={deleting}>Garder</button>
+          <button type="button" className="btn-primary" onClick={handleDeleteMovement} disabled={deleting}>{deleting ? 'Suppression...' : 'Supprimer'}</button>
+        </div>
       </Modal>
     </AppShell>
   )
