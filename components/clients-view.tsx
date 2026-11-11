@@ -2,10 +2,11 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
-import { AlertTriangle, CreditCard, Percent, Plus, Search, Users, Wallet, WalletCards } from 'lucide-react'
+import { AlertTriangle, CreditCard, History, Percent, Plus, Search, Users, Wallet, WalletCards } from 'lucide-react'
 import { AppShell } from '@/components/app-shell'
 import { Modal } from '@/components/modal'
 import { DiscountScaleModal } from '@/components/discount-scale-modal'
+import { PaymentHistoryModal } from '@/components/payment-history-modal'
 import { LoadError } from '@/components/load-error'
 import { authClient } from '@/lib/auth-client'
 import { downloadCsv } from '@/lib/download-csv'
@@ -158,6 +159,7 @@ export function ClientsView() {
   const [clientModalOpen, setClientModalOpen] = useState(false)
   const [paymentClient, setPaymentClient] = useState<Client | null>(null)
   const [discountClient, setDiscountClient] = useState<Client | null>(null)
+  const [historyClient, setHistoryClient] = useState<Client | null>(null)
   const [refreshKey, setRefreshKey] = useState(0)
 
   useEffect(() => {
@@ -227,7 +229,10 @@ export function ClientsView() {
                       <button className="btn-ghost" onClick={() => setPaymentClient(client)}><WalletCards size={12} style={{ verticalAlign: 'middle', marginRight: 4 }} />Encaisser</button>
                     )}
                     {isAdmin && (
-                      <button className="btn-ghost" onClick={() => setDiscountClient(client)}><Percent size={12} style={{ verticalAlign: 'middle', marginRight: 4 }} />Barème</button>
+                      <>
+                        <button className="btn-ghost" onClick={() => setDiscountClient(client)}><Percent size={12} style={{ verticalAlign: 'middle', marginRight: 4 }} />Barème</button>
+                        <button className="btn-ghost" onClick={() => setHistoryClient(client)}><History size={12} style={{ verticalAlign: 'middle', marginRight: 4 }} />Historique</button>
+                      </>
                     )}
                   </td>
                 </tr>
@@ -257,6 +262,14 @@ export function ClientsView() {
           partyType="client"
           partyId={discountClient.id}
           partyName={discountClient.name}
+        />
+      )}
+      {historyClient && (
+        <PaymentHistoryModal
+          open={historyClient !== null}
+          onClose={() => setHistoryClient(null)}
+          clientId={historyClient.id}
+          clientName={historyClient.name}
         />
       )}
     </AppShell>

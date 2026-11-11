@@ -1,5 +1,6 @@
+import { and, desc, eq, isNull } from 'drizzle-orm'
 import { db } from '../client'
-import { clients, payments, receivables, stores } from '../schema'
+import { clients, payments, receivables, sales, stores } from '../schema'
 import { formatFcfa, isPastDue } from '@/lib/format'
 
 export async function getClientsOverview(storeId: number | null = null) {
@@ -12,7 +13,7 @@ export async function getClientsOverview(storeId: number | null = null) {
     .select({ clientId: receivables.clientId, amount: receivables.amount, status: receivables.status, dueDate: receivables.dueDate })
     .from(receivables)
 
-  const paymentRows = await db.select({ clientId: payments.clientId, amount: payments.amount }).from(payments)
+  const paymentRows = await db.select({ clientId: payments.clientId, amount: payments.amount }).from(payments).where(isNull(payments.deletedAt))
 
   const result = clientRows.map((client) => {
     const outstandingRows = receivableRows.filter((row) => row.clientId === client.id && row.status !== 'paid')
@@ -44,4 +45,25 @@ export async function getClientsOverview(storeId: number | null = null) {
       overdueCount,
     },
   }
+}
+
+export async function getClientPaymentHistory(clientId: number) {
+  const rows = await db
+    .select({ id: payments.id, amount: payments.amount, method: payments.method, createdAt: payments.createdAt, saleId: payments.saleId, saleReference: sales.reference })
+    .from(payments)
+    .leftJoin(sales, eq(payments.saleId, sales.id))
+    .where(and(eq(payments.clientId, clientId), isNull(payments.deletedAt)))
+    .orderBy(desc(payments.createdAt))
+
+  return rows.map((row) => ({
+    id: row.id,
+    amount: row.amount,
+    amountFormatted: formatFcfa(row.amount),
+    method: row.method,
+    date: row.createdAt,
+    // Payments created alongside a sale (createSale/updateSale) are managed by that sale's own
+    // edit/delete — editing them here directly would desync the sale's totalAmount/paymentStatus
+    // from what it actually collected. The UI disables Modifier/Supprimer for these.
+    linkedSaleReference: row.saleReference,
+  }))
 }

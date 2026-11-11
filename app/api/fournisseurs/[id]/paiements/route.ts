@@ -1,7 +1,21 @@
 import { NextResponse } from 'next/server'
+import { getSupplierPaymentHistory } from '@/lib/db/queries'
 import { recordSupplierPayment } from '@/lib/db/mutations'
 import { toApiErrorMessage } from '@/lib/api-error'
 import { getSessionContext, isAdmin } from '@/lib/session'
+
+export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const ctx = await getSessionContext()
+  if (!ctx) return NextResponse.json({ error: 'Non authentifié.' }, { status: 401 })
+  if (!isAdmin(ctx)) return NextResponse.json({ error: 'Réservé aux administrateurs.' }, { status: 403 })
+
+  const { id } = await params
+  const supplierId = Number(id)
+  if (!Number.isFinite(supplierId)) return NextResponse.json({ error: 'Fournisseur introuvable.' }, { status: 400 })
+
+  const payments = await getSupplierPaymentHistory(supplierId)
+  return NextResponse.json({ payments })
+}
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const ctx = await getSessionContext()

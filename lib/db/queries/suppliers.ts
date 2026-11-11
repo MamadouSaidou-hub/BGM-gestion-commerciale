@@ -1,5 +1,6 @@
+import { and, desc, eq, isNull } from 'drizzle-orm'
 import { db } from '../client'
-import { supplierDeliveries, supplierPayables, supplierPayments, suppliers } from '../schema'
+import { products, stores, supplierDeliveries, supplierPayables, supplierPayments, suppliers } from '../schema'
 import { formatFcfa, isPastDue } from '@/lib/format'
 
 export async function getSuppliersOverview() {
@@ -7,8 +8,14 @@ export async function getSuppliersOverview() {
   const payableRows = await db
     .select({ supplierId: supplierPayables.supplierId, amount: supplierPayables.amount, status: supplierPayables.status, dueDate: supplierPayables.dueDate })
     .from(supplierPayables)
-  const paymentRows = await db.select({ supplierId: supplierPayments.supplierId, amount: supplierPayments.amount }).from(supplierPayments)
-  const deliveryRows = await db.select({ supplierId: supplierDeliveries.supplierId, sackCount: supplierDeliveries.sackCount, createdAt: supplierDeliveries.createdAt }).from(supplierDeliveries)
+  const paymentRows = await db
+    .select({ supplierId: supplierPayments.supplierId, amount: supplierPayments.amount })
+    .from(supplierPayments)
+    .where(isNull(supplierPayments.deletedAt))
+  const deliveryRows = await db
+    .select({ supplierId: supplierDeliveries.supplierId, sackCount: supplierDeliveries.sackCount, createdAt: supplierDeliveries.createdAt })
+    .from(supplierDeliveries)
+    .where(isNull(supplierDeliveries.deletedAt))
 
   const monthStart = new Date()
   monthStart.setDate(1)
@@ -49,4 +56,44 @@ export async function getSuppliersOverview() {
 
 export async function getSupplierOptions() {
   return db.select({ id: suppliers.id, name: suppliers.name }).from(suppliers).orderBy(suppliers.name)
+}
+
+export async function getSupplierDeliveryHistory(supplierId: number) {
+  const rows = await db
+    .select({
+      id: supplierDeliveries.id,
+      storeName: stores.name,
+      productName: products.name,
+      sackCount: supplierDeliveries.sackCount,
+      tonnage: supplierDeliveries.tonnage,
+      totalAmount: supplierDeliveries.totalAmount,
+      reference: supplierDeliveries.reference,
+      createdAt: supplierDeliveries.createdAt,
+    })
+    .from(supplierDeliveries)
+    .innerJoin(stores, eq(supplierDeliveries.storeId, stores.id))
+    .innerJoin(products, eq(supplierDeliveries.productId, products.id))
+    .where(and(eq(supplierDeliveries.supplierId, supplierId), isNull(supplierDeliveries.deletedAt)))
+    .orderBy(desc(supplierDeliveries.createdAt))
+
+  return rows.map((row) => ({
+    id: row.id,
+    store: row.storeName,
+    product: row.productName,
+    sackCount: row.sackCount,
+    tonnage: row.tonnage,
+    totalAmountFormatted: formatFcfa(row.totalAmount),
+    reference: row.reference,
+    date: row.createdAt,
+  }))
+}
+
+export async function getSupplierPaymentHistory(supplierId: number) {
+  const rows = await db
+    .select({ id: supplierPayments.id, amount: supplierPayments.amount, method: supplierPayments.method, createdAt: supplierPayments.createdAt })
+    .from(supplierPayments)
+    .where(and(eq(supplierPayments.supplierId, supplierId), isNull(supplierPayments.deletedAt)))
+    .orderBy(desc(supplierPayments.createdAt))
+
+  return rows.map((row) => ({ id: row.id, amount: row.amount, amountFormatted: formatFcfa(row.amount), method: row.method, date: row.createdAt }))
 }

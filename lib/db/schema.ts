@@ -169,6 +169,8 @@ export const payments = pgTable(
       .references(() => stores.id, { onDelete: 'cascade' }),
     amount: doublePrecision('amount').notNull(),
     method: text('method', { enum: paymentMethod }).notNull().default('cash'),
+    // Soft delete — null means active, same convention as sales.deletedAt.
+    deletedAt: text('deleted_at'),
     ...timestamps,
   },
   (table) => [
@@ -265,6 +267,8 @@ export const supplierDeliveries = pgTable(
     sackCount: integer('sack_count').notNull(),
     tonnage: doublePrecision('tonnage'),
     totalAmount: doublePrecision('total_amount').notNull(),
+    // Soft delete — null means active, same convention as sales.deletedAt.
+    deletedAt: text('deleted_at'),
     ...timestamps,
   },
   (table) => [
@@ -304,6 +308,8 @@ export const supplierPayments = pgTable(
       .references(() => suppliers.id, { onDelete: 'cascade' }),
     amount: doublePrecision('amount').notNull(),
     method: text('method', { enum: paymentMethod }).notNull().default('cash'),
+    // Soft delete — null means active, same convention as sales.deletedAt.
+    deletedAt: text('deleted_at'),
     ...timestamps,
   },
   (table) => [index('supplier_payments_supplier_id_idx').on(table.supplierId), index('supplier_payments_created_at_idx').on(table.createdAt)],

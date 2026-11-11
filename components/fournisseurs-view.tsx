@@ -2,10 +2,11 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
-import { AlertTriangle, Package, Percent, Plus, Search, Truck, Wallet, WalletCards } from 'lucide-react'
+import { AlertTriangle, History, Package, Percent, Plus, Search, Truck, Wallet, WalletCards } from 'lucide-react'
 import { AppShell } from '@/components/app-shell'
 import { Modal } from '@/components/modal'
 import { DiscountScaleModal } from '@/components/discount-scale-modal'
+import { SupplierHistoryModal } from '@/components/supplier-history-modal'
 import { LoadError } from '@/components/load-error'
 import { downloadCsv } from '@/lib/download-csv'
 import { fetchJson } from '@/lib/fetch-json'
@@ -247,6 +248,7 @@ export function FournisseursView() {
   const [deliverySupplier, setDeliverySupplier] = useState<Supplier | null>(null)
   const [paymentSupplier, setPaymentSupplier] = useState<Supplier | null>(null)
   const [discountSupplier, setDiscountSupplier] = useState<Supplier | null>(null)
+  const [historySupplier, setHistorySupplier] = useState<Supplier | null>(null)
   const [refreshKey, setRefreshKey] = useState(0)
 
   useEffect(() => {
@@ -318,6 +320,7 @@ export function FournisseursView() {
                       <button className="btn-ghost" onClick={() => setPaymentSupplier(supplier)}><WalletCards size={12} style={{ verticalAlign: 'middle', marginRight: 4 }} />Payer</button>
                     )}
                     <button className="btn-ghost" onClick={() => setDiscountSupplier(supplier)}><Percent size={12} style={{ verticalAlign: 'middle', marginRight: 4 }} />Barème</button>
+                    <button className="btn-ghost" onClick={() => setHistorySupplier(supplier)}><History size={12} style={{ verticalAlign: 'middle', marginRight: 4 }} />Historique</button>
                   </td>
                 </tr>
               ))}
@@ -355,6 +358,14 @@ export function FournisseursView() {
           partyType="supplier"
           partyId={discountSupplier.id}
           partyName={discountSupplier.name}
+        />
+      )}
+      {historySupplier && (
+        <SupplierHistoryModal
+          open={historySupplier !== null}
+          onClose={() => setHistorySupplier(null)}
+          supplierId={historySupplier.id}
+          supplierName={historySupplier.name}
         />
       )}
     </AppShell>
