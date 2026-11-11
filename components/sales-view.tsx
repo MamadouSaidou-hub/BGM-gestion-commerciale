@@ -646,7 +646,7 @@ export function SalesView() {
                           <Pencil size={12} style={{ verticalAlign: 'middle', marginRight: 4 }} />Modifier
                         </button>
                         <button type="button" className="btn-ghost" onClick={() => { setCancelError(''); setCancelReason(''); setCancellingSale(sale) }}>
-                          <Trash2 size={12} style={{ verticalAlign: 'middle', marginRight: 4 }} />Annuler
+                          <Trash2 size={12} style={{ verticalAlign: 'middle', marginRight: 4 }} />Supprimer
                         </button>
                       </>
                     )}
@@ -671,7 +671,7 @@ export function SalesView() {
         />
       </Modal>
 
-      <Modal open={cancellingSale !== null} onClose={() => setCancellingSale(null)} title="Annuler cette vente ?" subtitle={cancellingSale ? `Vente #${cancellingSale.reference} — ${cancellingSale.amount}` : ''}>
+      <Modal open={cancellingSale !== null} onClose={() => setCancellingSale(null)} title="Supprimer cette vente ?" subtitle={cancellingSale ? `Vente #${cancellingSale.reference} — ${cancellingSale.amount}` : ''}>
         {cancelError && <p className="form-error">{cancelError}</p>}
         <p className="section-subtitle">
           Le stock vendu sera restauré. La vente reste visible dans l’historique (marquée annulée, avec qui et quand) — elle disparaît des listes et des totaux.
@@ -682,7 +682,7 @@ export function SalesView() {
         </div>
         <div className="form-actions">
           <button type="button" className="btn-secondary" onClick={() => setCancellingSale(null)} disabled={cancelling}>Garder la vente</button>
-          <button type="button" className="btn-primary" onClick={handleCancelSale} disabled={cancelling}>{cancelling ? 'Annulation...' : 'Annuler la vente'}</button>
+          <button type="button" className="btn-primary" onClick={handleCancelSale} disabled={cancelling}>{cancelling ? 'Suppression...' : 'Supprimer la vente'}</button>
         </div>
       </Modal>
 
